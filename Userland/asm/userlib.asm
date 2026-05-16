@@ -34,6 +34,7 @@ GLOBAL sys_sem_post
 GLOBAL sys_sem_close
 GLOBAL sys_pipe
 GLOBAL sys_pipe_close
+GLOBAL sys_pipe_open
 GLOBAL sys_create_process_fd
 
 section .text
@@ -130,6 +131,11 @@ sys_pipe:
 
 sys_pipe_close:
     mov rax, 34
+    int 0x80
+    ret
+
+sys_pipe_open:
+    mov rax, 36
     int 0x80
     ret
 

@@ -49,7 +49,7 @@ uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
 
     if (pipe_is_fd(phys_fd)) {
         int64_t n = pipe_write(phys_fd, buff, count);
-        return (n < 0) ? 0 : (uint64_t)n;
+        return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
     }
 
     uint32_t color = 0xFFFFFF;
@@ -68,7 +68,7 @@ uint64_t sys_read(char * buff, uint64_t count){
 
     if (pipe_is_fd(phys_fd)) {
         int64_t n = pipe_read(phys_fd, buff, count);
-        return (n < 0) ? 0 : (uint64_t)n;
+        return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
     }
 
     uint64_t n = readKeyBuff(buff, count);
@@ -221,6 +221,11 @@ int64_t sys_create_process_fd(uint64_t name, uint64_t entry,
                                       fg, fd_in, fd_out);
 }
 
+/* Abre (o crea) un pipe nombrado. Retorna 0 en exito. */
+int64_t sys_pipe_open(const char *name, uint64_t fds) {
+    return (int64_t)pipe_open(name, (int *)fds);
+}
+
 // ─── Tabla de syscalls ────────────────────────────────────────────────────────
 
 void * syscalls[CANT_SYS] = {
@@ -260,4 +265,5 @@ void * syscalls[CANT_SYS] = {
     &sys_pipe,              // 33
     &sys_pipe_close,        // 34
     &sys_create_process_fd, // 35
+    &sys_pipe_open,         // 36
 };

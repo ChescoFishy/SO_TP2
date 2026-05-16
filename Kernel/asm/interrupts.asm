@@ -281,8 +281,8 @@ _exception6Handler:
 _irq128Handler:
 	pushState
 
-	cmp rax, 36                 ; CANT_SYS
-	jge .invalid_syscall
+	cmp rax, 37                 ; CANT_SYS
+	jae .invalid_syscall
 
 	call [syscalls + rax * 8]
 	mov [rsp + 14*8], rax       ; guardar retorno en el slot RAX del stack

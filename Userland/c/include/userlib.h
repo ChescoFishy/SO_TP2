@@ -99,6 +99,7 @@ int64_t  sys_sem_close(const char *name);
 // ─── Syscalls de pipes ────────────────────────────────────────────────────────
 int64_t  sys_pipe(int fds[2]);
 int64_t  sys_pipe_close(int fd);
+int64_t  sys_pipe_open(const char *name, int fds[2]);
 /* fg_fdin_fdout: bits[0:7]=fg, bits[16:31]=fd_in, bits[32:47]=fd_out */
 int64_t  sys_create_process_fd(const char *name, void *entry,
                                int argc, char **argv,

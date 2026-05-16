@@ -53,4 +53,7 @@ int64_t  sys_create_process_fd(uint64_t name, uint64_t entry,
                                uint64_t argc, uint64_t argv,
                                uint64_t fg_fdin_fdout);
 
+// Syscalls 36 (pipes nombrados)
+int64_t  sys_pipe_open(const char *name, uint64_t fds);
+
 #endif

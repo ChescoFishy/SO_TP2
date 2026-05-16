@@ -12,6 +12,7 @@ typedef struct {
     char     data_sem[16];   /* cuenta bytes disponibles */
     char     space_sem[16];  /* cuenta espacio libre */
     char     mutex_sem[16];  /* exclusion mutua sobre buffer */
+    char     name[PIPE_NAME_LEN]; /* nombre para pipe_open (identificador a priori) */
 } Pipe;
 
 static Pipe pipes[MAX_PIPES];
@@ -40,6 +41,18 @@ static void build_name(char *out, const char *prefix, int idx) {
     out[i] = '\0';
 }
 
+static int str_eq(const char *a, const char *b) {
+    if (!a || !b) return 0;
+    while (*a && (*a == *b)) { a++; b++; }
+    return (unsigned char)*a == (unsigned char)*b;
+}
+
+static void str_copy_n(char *dst, const char *src, int max) {
+    int i = 0;
+    while (i < max - 1 && src && src[i]) { dst[i] = src[i]; i++; }
+    dst[i] = '\0';
+}
+
 static int fd_to_index(int fd) {
     if (fd >= PIPE_FD_WRITE_BASE && fd < PIPE_FD_WRITE_BASE + MAX_PIPES)
         return fd - PIPE_FD_WRITE_BASE;
@@ -62,6 +75,7 @@ void pipe_init(void) {
         pipes[i].tail    = 0;
         pipes[i].readers = 0;
         pipes[i].writers = 0;
+        pipes[i].name[0] = '\0';
     }
 }
 
@@ -84,6 +98,7 @@ int pipe_create(int fds[2]) {
     p->tail    = 0;
     p->readers = 1;
     p->writers = 1;
+    p->name[0] = '\0';
 
     build_name(p->data_sem,  "__pipe_d_", i);
     build_name(p->space_sem, "__pipe_s_", i);
@@ -97,6 +112,55 @@ int pipe_create(int fds[2]) {
         sem_close(p->space_sem);
         sem_close(p->mutex_sem);
         p->in_use = 0;
+        return -1;
+    }
+
+    fds[0] = PIPE_FD_READ_BASE  + i;
+    fds[1] = PIPE_FD_WRITE_BASE + i;
+    return 0;
+}
+
+/* Abre (o crea) un pipe nombrado. Procesos no relacionados pueden compartir
+** un pipe acordando el mismo nombre a priori. Retorna 0 en exito. */
+int pipe_open(const char *name, int fds[2]) {
+    if (!name || !fds) return -1;
+
+    int i;
+    for (i = 0; i < MAX_PIPES; i++) {
+        if (pipes[i].in_use && str_eq(pipes[i].name, name)) {
+            pipes[i].readers++;
+            pipes[i].writers++;
+            fds[0] = PIPE_FD_READ_BASE  + i;
+            fds[1] = PIPE_FD_WRITE_BASE + i;
+            return 0;
+        }
+    }
+
+    for (i = 0; i < MAX_PIPES; i++) {
+        if (!pipes[i].in_use) break;
+    }
+    if (i == MAX_PIPES) return -1;
+
+    Pipe *p = &pipes[i];
+    p->in_use  = 1;
+    p->head    = 0;
+    p->tail    = 0;
+    p->readers = 1;
+    p->writers = 1;
+    str_copy_n(p->name, name, PIPE_NAME_LEN);
+
+    build_name(p->data_sem,  "__pipe_d_", i);
+    build_name(p->space_sem, "__pipe_s_", i);
+    build_name(p->mutex_sem, "__pipe_m_", i);
+
+    if (!sem_open(p->data_sem,  0) ||
+        !sem_open(p->space_sem, PIPE_BUF_SIZE) ||
+        !sem_open(p->mutex_sem, 1)) {
+        sem_close(p->data_sem);
+        sem_close(p->space_sem);
+        sem_close(p->mutex_sem);
+        p->in_use = 0;
+        p->name[0] = '\0';
         return -1;
     }
 
