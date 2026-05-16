@@ -136,6 +136,22 @@ int64_t sem_post(const char *name) {
     return 0;
 }
 
+/* Despierta todos los procesos bloqueados en este semáforo. */
+int64_t sem_broadcast(const char *name) {
+    if (!name) return -1;
+
+    Semaphore *s = find_sem(name);
+    if (!s) return -1;
+
+    while (s->wait_count > 0) {
+        s->value++;
+        uint64_t pid = queue_pop(s);
+        process_unblock(pid);
+    }
+
+    return 0;
+}
+
 /* Decrementa el contador de usuarios; libera la entrada si llega a 0. */
 int64_t sem_close(const char *name) {
     if (!name) return -1;

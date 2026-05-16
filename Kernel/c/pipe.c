@@ -66,10 +66,12 @@ void pipe_init(void) {
 }
 
 int pipe_is_fd(int fd) {
-    return fd >= PIPE_FD_READ_BASE && fd < PIPE_FD_WRITE_BASE + MAX_PIPES;
+    return (fd >= PIPE_FD_READ_BASE && fd < PIPE_FD_READ_BASE + MAX_PIPES) ||
+           (fd >= PIPE_FD_WRITE_BASE && fd < PIPE_FD_WRITE_BASE + MAX_PIPES);
 }
 
 int pipe_create(int fds[2]) {
+    if (!fds) return -1;
     int i;
     for (i = 0; i < MAX_PIPES; i++) {
         if (!pipes[i].in_use) break;
@@ -111,12 +113,12 @@ int pipe_close(int fd) {
 
     if (fd_is_write(fd)) {
         if (p->writers > 0) p->writers--;
-        /* despertar cualquier reader bloqueado para que vea EOF */
-        if (p->writers == 0) sem_post(p->data_sem);
+        /* despertar a todos los readers bloqueados para que vean EOF */
+        if (p->writers == 0) sem_broadcast(p->data_sem);
     } else {
         if (p->readers > 0) p->readers--;
-        /* despertar cualquier writer bloqueado (verá broken pipe) */
-        if (p->readers == 0) sem_post(p->space_sem);
+        /* despertar a todos los writers bloqueados (verán broken pipe) */
+        if (p->readers == 0) sem_broadcast(p->space_sem);
     }
 
     if (p->readers == 0 && p->writers == 0) {
@@ -146,8 +148,6 @@ int64_t pipe_read(int fd, char *buf, uint64_t n) {
 
         /* tras el wait, si seguimos sin datos y no hay writers → EOF */
         if (p->head == p->tail && p->writers == 0) {
-            /* re-post para no descontar a otros lectores futuros */
-            sem_post(p->data_sem);
             return (int64_t)read;
         }
 
@@ -179,7 +179,6 @@ int64_t pipe_write(int fd, const char *buf, uint64_t n) {
         sem_wait(p->space_sem);
 
         if (p->readers == 0) {
-            sem_post(p->space_sem);
             return -1;
         }
 
