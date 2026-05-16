@@ -3,8 +3,10 @@
 
 #include "userlib.h"
 
-/* Test de procesos: crea, bloquea, desbloquea y mata procesos dummy.
-   Lee el argumento (cantidad maxima de procesos) via cmd_args(). */
+/* Entry point como proceso. */
+void test_proc_main(int argc, char **argv);
+
+/* Wrapper de shell: crea test_proc como proceso foreground y espera. */
 void test_proc(void);
 
 #endif

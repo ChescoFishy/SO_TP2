@@ -81,7 +81,18 @@ static int64_t test_sync_internal(uint64_t argc, char *argv[]) {
     return 0;
 }
 
-/* Wrapper de shell: test_sync <n> <use_sem> */
+/* Entry point como proceso: test_sync <n> <use_sem> */
+void test_sync_main(int argc, char **argv) {
+    if (argc < 2 || argv == 0 || argv[0] == 0 || argv[1] == 0) {
+        printf("uso: test_sync <n> <use_sem>\n");
+        sys_exit(-1);
+    }
+    char *args[2] = {argv[0], argv[1]};
+    test_sync_internal(2, args);
+    sys_exit(0);
+}
+
+/* Wrapper de shell: crea test_sync como proceso foreground y espera. */
 void test_sync_cmd(void) {
     const char *args = cmd_args();
     if (!args) {
@@ -89,8 +100,8 @@ void test_sync_cmd(void) {
         return;
     }
 
-    /* Separar los dos argumentos */
-    char buf[64];
+    /* Separar los dos argumentos en buf estatico (vive mientras la shell espera). */
+    static char buf[64];
     uint64_t i = 0;
     while (args[i] && i < 63) { buf[i] = args[i]; i++; }
     buf[i] = '\0';
@@ -107,5 +118,6 @@ void test_sync_cmd(void) {
     }
 
     char *argv[2] = {buf, p};
-    test_sync_internal(2, argv);
+    int64_t pid = sys_create_process("test_sync", test_sync_main, 2, argv, 1);
+    if (pid > 0) sys_waitpid((uint64_t)pid);
 }

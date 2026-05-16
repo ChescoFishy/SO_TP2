@@ -86,7 +86,18 @@ static int64_t test_processes(uint64_t argc, char *argv[]) {
     }
 }
 
-/* Wrapper de shell: test_proc <max_processes> */
+/* Entry point como proceso: test_proc <max_processes> */
+void test_proc_main(int argc, char **argv) {
+    if (argc < 1 || argv == 0 || argv[0] == 0) {
+        printf("uso: test_proc <max_processes>\n");
+        sys_exit(-1);
+    }
+    char *args[1] = {argv[0]};
+    test_processes(1, args);
+    sys_exit(0);
+}
+
+/* Wrapper de shell: crea test_proc como proceso foreground y espera. */
 void test_proc(void) {
     const char *args = cmd_args();
     if (!args) {
@@ -94,5 +105,6 @@ void test_proc(void) {
         return;
     }
     char *argv[1] = {(char *)args};
-    test_processes(1, argv);
+    int64_t pid = sys_create_process("test_proc", test_proc_main, 1, argv, 1);
+    if (pid > 0) sys_waitpid((uint64_t)pid);
 }

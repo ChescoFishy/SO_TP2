@@ -5,6 +5,9 @@
 
 void test_sync_cmd(void);
 
+/* Entry point como proceso. */
+void test_sync_main(int argc, char **argv);
+
 /* Entry point de proceso worker. No-static para el registro de syscall.c.
    Firma compatible con ProcessEntry (int argc, char **argv). */
 void my_process_inc(int argc, char *argv[]);

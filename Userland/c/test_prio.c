@@ -75,7 +75,18 @@ static int64_t test_prio_internal(uint64_t argc, char *argv[]) {
     return 0;
 }
 
-/* Wrapper de shell: test_prio <max_value> */
+/* Entry point como proceso: test_prio <max_value> */
+void test_prio_main(int argc, char **argv) {
+    if (argc < 1 || argv == 0 || argv[0] == 0) {
+        printf("uso: test_prio <max_value>\n");
+        sys_exit(-1);
+    }
+    char *args[1] = {argv[0]};
+    test_prio_internal(1, args);
+    sys_exit(0);
+}
+
+/* Wrapper de shell: crea test_prio como proceso foreground y espera. */
 void test_prio(void) {
     const char *args = cmd_args();
     if (!args) {
@@ -83,5 +94,6 @@ void test_prio(void) {
         return;
     }
     char *argv[1] = {(char *)args};
-    test_prio_internal(1, argv);
+    int64_t pid = sys_create_process("test_prio", test_prio_main, 1, argv, 1);
+    if (pid > 0) sys_waitpid((uint64_t)pid);
 }

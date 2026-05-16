@@ -44,7 +44,7 @@ static void test_mm_loop(uint64_t max_memory) {
             if (mm_rqs[i].address) {
                 if (!memcheck(mm_rqs[i].address, (uint8_t)i, mm_rqs[i].size)) {
                     printf("test_mm ERROR\n");
-                    return;
+                    sys_exit(-1);
                 }
             }
         }
@@ -56,13 +56,29 @@ static void test_mm_loop(uint64_t max_memory) {
     }
 }
 
-/* Wrapper de shell: testMM <max_memory> */
-void testMM(void) {
-    const char *args = cmd_args();
-    int64_t max_memory = satoi((char *)args);
+/* Entry point como proceso: test_mm <max_memory> */
+void test_mm_main(int argc, char **argv) {
+    if (argc < 1 || argv == 0 || argv[0] == 0) {
+        printf("uso: test_mm <max_memory>\n");
+        sys_exit(-1);
+    }
+    int64_t max_memory = satoi(argv[0]);
     if (max_memory <= 0) {
-        shellPrintString("uso: testMM <max_memory>\n");
-        return;
+        printf("uso: test_mm <max_memory>\n");
+        sys_exit(-1);
     }
     test_mm_loop((uint64_t)max_memory);
+    sys_exit(0);
+}
+
+/* Wrapper de shell: crea test_mm como proceso foreground y espera. */
+void testMM(void) {
+    const char *args = cmd_args();
+    if (!args) {
+        shellPrintString("uso: test_mm <max_memory>\n");
+        return;
+    }
+    char *argv[1] = {(char *)args};
+    int64_t pid = sys_create_process("test_mm", test_mm_main, 1, argv, 1);
+    if (pid > 0) sys_waitpid((uint64_t)pid);
 }
