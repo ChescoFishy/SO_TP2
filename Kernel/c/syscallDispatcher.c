@@ -9,6 +9,7 @@
 #include "process.h"
 #include "scheduler.h"
 #include "semaphore.h"
+#include "pipe.h"
 
 // ─── Syscalls de memoria (16-18) ──────────────────────────────────────────────
 
@@ -37,8 +38,20 @@ void sys_clear(void){
     clearScreen(0x000000);
 }
 
+/* sys_write: el fd logico (0=stdin, 1=stdout) se mapea a traves del PCB.
+** Si el fd fisico es un pipe, se redirige; si no, va a la consola. */
 uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
-    (void)fd;
+    PCB *cur = process_current();
+    int phys_fd = 1;  /* default: consola */
+    if (cur != NULL && fd < 2) {
+        phys_fd = cur->fd[fd];
+    }
+
+    if (pipe_is_fd(phys_fd)) {
+        int64_t n = pipe_write(phys_fd, buff, count);
+        return (n < 0) ? 0 : (uint64_t)n;
+    }
+
     uint32_t color = 0xFFFFFF;
     for(uint64_t i = 0; i < count; i++){
         videoPutChar((uint8_t)buff[i], color);
@@ -46,12 +59,20 @@ uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
     return count;
 }
 
-// sys_read: si no hay tecla disponible, bloquea el proceso actual y cede CPU.
-// Cuando el teclado despierte al proceso, userland reintentara la llamada.
+/* sys_read: usa el fd[0] del PCB. Si es pipe, bloquea via semaforo del pipe;
+** si es teclado (0), reproduce el comportamiento original (no bloqueante,
+** se bloquea el proceso si no hay datos y userland reintenta). */
 uint64_t sys_read(char * buff, uint64_t count){
+    PCB *cur = process_current();
+    int phys_fd = (cur != NULL) ? cur->fd[0] : 0;
+
+    if (pipe_is_fd(phys_fd)) {
+        int64_t n = pipe_read(phys_fd, buff, count);
+        return (n < 0) ? 0 : (uint64_t)n;
+    }
+
     uint64_t n = readKeyBuff(buff, count);
     if (n == 0) {
-        PCB *cur = process_current();
         if (cur != NULL) {
             kbd_set_waiting(cur);
             cur->state = PROCESS_BLOCKED;
@@ -175,6 +196,31 @@ int64_t sys_sem_close(const char *name) {
     return sem_close(name);
 }
 
+// ─── Syscalls de pipes (33-35) ────────────────────────────────────────────────
+
+int64_t sys_pipe(uint64_t fds) {
+    return (int64_t)pipe_create((int *)fds);
+}
+
+int64_t sys_pipe_close(uint64_t fd) {
+    return (int64_t)pipe_close((int)fd);
+}
+
+/* fg_fdin_fdout empaqueta tres campos chicos: bits[0:7]=fg,
+** bits[16:31]=fd_in, bits[32:47]=fd_out. */
+int64_t sys_create_process_fd(uint64_t name, uint64_t entry,
+                              uint64_t argc, uint64_t argv,
+                              uint64_t fg_fdin_fdout) {
+    uint8_t  fg     = (uint8_t)(fg_fdin_fdout & 0xFF);
+    int      fd_in  = (int)(int16_t)((fg_fdin_fdout >> 16) & 0xFFFF);
+    int      fd_out = (int)(int16_t)((fg_fdin_fdout >> 32) & 0xFFFF);
+    return (int64_t)process_create_fd((const char *)name,
+                                      (ProcessEntry)entry,
+                                      (int)argc,
+                                      (char **)argv,
+                                      fg, fd_in, fd_out);
+}
+
 // ─── Tabla de syscalls ────────────────────────────────────────────────────────
 
 void * syscalls[CANT_SYS] = {
@@ -211,4 +257,7 @@ void * syscalls[CANT_SYS] = {
     &sys_sem_wait,          // 30
     &sys_sem_post,          // 31
     &sys_sem_close,         // 32
+    &sys_pipe,              // 33
+    &sys_pipe_close,        // 34
+    &sys_create_process_fd, // 35
 };

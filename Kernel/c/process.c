@@ -2,6 +2,7 @@
 #include "scheduler.h"
 #include "memoryManager.h"
 #include "lib.h"
+#include "pipe.h"
 #include <stddef.h>
 
 /* Tabla de procesos del Kernel. */
@@ -118,57 +119,70 @@ PCB* process_get(uint64_t pid){
     return NULL;
 }
 
-/* Crea un nuevo proceso. */
-int process_create(const char *name, ProcessEntry entry, int argc, char **argv, uint8_t fg){
+/* Crea un nuevo proceso con stdin/stdout customizables. */
+int process_create_fd(const char *name, ProcessEntry entry, int argc, char **argv,
+                      uint8_t fg, int fd_in, int fd_out){
 
-    /* Buscar slot libre. */ 
+    /* Buscar slot libre. */
     int slot = -1;
     for(int i = 0; i < MAX_PROCESSES && slot == -1; i++){
         if(process_table[i].state == PROCESS_FREE){
             slot = i;
         }
     }
-    
+
     if(slot < 0){
         return -1;
     }
 
     PCB* p = &process_table[slot];
 
-    /* Asignar stack (kernel-internal: no se contabiliza en alloc_count del usuario)
-    ** para diferenciarlo del stack del usuario. */
     p->stack_base = (uint64_t *)mm_malloc_kernel(STACK_SIZE);
     if(p->stack_base == NULL){
         return -1;
     }
 
-    /* Construir frame inicial. */ 
     void* stack_top = (void*)((uint8_t *)p->stack_base + STACK_SIZE);
     p->rsp = build_initial_stack(stack_top, entry, argc, argv);
 
-    /* Rellenar PCB */ 
     p->pid = ++next_pid;
     p->priority = DEFAULT_PRIORITY;
     p->remaining_quanta = DEFAULT_PRIORITY;
     p->state = PROCESS_READY;
-    p->foreground = fg;     /* flag para indicar si el proceso es de primer plano. */
-    p->fd[0] = 0;           /* stdin */
-    p->fd[1] = 1;           /* stdout */
+    p->foreground = fg;
+    p->fd[0] = fd_in;
+    p->fd[1] = fd_out;
     p->parent_pid = ((current_process != NULL) ? (current_process->pid) : 0);
-    p->waiting_for = 0;     /* Indica si se esta esperando a otro proceso. Sirve para que el scheduler sepa cuando desbloquearlo. */
-    p->argc = argc;         
+    p->waiting_for = 0;
+    p->argc = argc;
     p->argv = argv;
-    p->retval = 0; 
+    p->retval = 0;
 
     str_copy(p->name, name, MAX_NAME_LEN);
-    
+
     if(str_len(p->name) == 0){
         p->name[0] = '?';
         p->name[1] = '\0';
     }
 
-    scheduler_add(p);       /* Agregar el proceso a la tabla de procesos listos para ejecutar. */
-    return (int)p->pid; 
+    scheduler_add(p);
+    return (int)p->pid;
+}
+
+/* Crea un nuevo proceso con stdin=teclado / stdout=consola por defecto. */
+int process_create(const char *name, ProcessEntry entry, int argc, char **argv, uint8_t fg){
+    return process_create_fd(name, entry, argc, argv, fg, 0, 1);
+}
+
+/* Cierra cualquier fd que sea pipe en el PCB y los resetea a -1
+** para evitar dobles cierres si la rutina se invoca dos veces sobre el mismo PCB. */
+static void close_process_pipes(PCB *p){
+    for(int i = 0; i < 2; i++){
+        if(pipe_is_fd(p->fd[i])){
+            pipe_close(p->fd[i]);
+            p->fd[i] = -1;
+        }
+    }
 }
 
 /* Finaliza el proceso actual. */
@@ -176,6 +190,8 @@ void process_exit(int retval){
     if(current_process == NULL){
         return;
     }
+
+    close_process_pipes(current_process);
 
     current_process->retval = retval;
 
@@ -207,6 +223,8 @@ void process_kill(uint64_t pid){
     if(p == NULL || p->state == PROCESS_FREE || p->state == PROCESS_ZOMBIE){
         return;
     }
+
+    close_process_pipes(p);
 
     p->retval = -1;
 

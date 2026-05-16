@@ -46,4 +46,11 @@ int64_t  sys_sem_wait(const char *name);
 int64_t  sys_sem_post(const char *name);
 int64_t  sys_sem_close(const char *name);
 
+// Syscalls 33-35 (pipes)
+int64_t  sys_pipe(uint64_t fds);
+int64_t  sys_pipe_close(uint64_t fd);
+int64_t  sys_create_process_fd(uint64_t name, uint64_t entry,
+                               uint64_t argc, uint64_t argv,
+                               uint64_t fg_fdin_fdout);
+
 #endif

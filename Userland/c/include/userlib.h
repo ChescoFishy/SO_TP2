@@ -96,6 +96,14 @@ int64_t  sys_sem_wait(const char *name);
 int64_t  sys_sem_post(const char *name);
 int64_t  sys_sem_close(const char *name);
 
+// ─── Syscalls de pipes ────────────────────────────────────────────────────────
+int64_t  sys_pipe(int fds[2]);
+int64_t  sys_pipe_close(int fd);
+/* fg_fdin_fdout: bits[0:7]=fg, bits[16:31]=fd_in, bits[32:47]=fd_out */
+int64_t  sys_create_process_fd(const char *name, void *entry,
+                               int argc, char **argv,
+                               uint64_t fg_fdin_fdout);
+
 // ─── Utilitarios ─────────────────────────────────────────────────────────────
 uint64_t putchar(char c);
 char getchar(void);

@@ -51,6 +51,8 @@ typedef struct{
 
 void process_init(void);
 int process_create(const char *name, ProcessEntry entry, int argc, char **argv, uint8_t fg);
+int process_create_fd(const char *name, ProcessEntry entry, int argc, char **argv,
+                      uint8_t fg, int fd_in, int fd_out);
 void process_exit(int retval);
 PCB* process_get(uint64_t pid);
 PCB* process_current(void);
