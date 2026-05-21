@@ -10,6 +10,7 @@ static PCB process_table[MAX_PROCESSES];
 
 static uint64_t next_pid = 0;
 static PCB* current_process = NULL;
+static uint64_t fg_pid = 0;   /* ultimo proceso foreground creado y vivo */
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -170,8 +171,23 @@ int process_create_fd(const char *name, ProcessEntry entry, int argc, char **arg
         p->name[1] = '\0';
     }
 
+    /* Tracking del PID foreground actual para Ctrl+C. Solo cuentan procesos
+    ** creados desde otro proceso (la shell): los del kernel init no deben
+    ** quedar registrados como foreground (sino Ctrl+C mataria la shell). */
+    if(fg && current_process != NULL){
+        fg_pid = p->pid;
+    }
+
     scheduler_add(p);
     return (int)p->pid;
+}
+
+uint64_t process_get_foreground(void){
+    PCB *p = process_get(fg_pid);
+    if(p == NULL || p->state == PROCESS_FREE || p->state == PROCESS_ZOMBIE){
+        return 0;
+    }
+    return fg_pid;
 }
 
 /* Crea un nuevo proceso con stdin=teclado / stdout=consola por defecto. */
@@ -197,6 +213,10 @@ void process_exit(int retval){
     }
 
     close_process_pipes(current_process);
+
+    if(current_process->pid == fg_pid){
+        fg_pid = 0;
+    }
 
     current_process->retval = retval;
 
@@ -230,6 +250,10 @@ void process_kill(uint64_t pid){
     }
 
     close_process_pipes(p);
+
+    if(p->pid == fg_pid){
+        fg_pid = 0;
+    }
 
     p->retval = -1;
 

@@ -6,34 +6,78 @@
 #include "include/test_proc.h"
 #include "include/test_prio.h"
 #include "include/test_sync.h"
+#include "include/test_util.h"
+
+/* Forward decls de helpers definidos mas abajo. */
+static size_t strlen(const char *s);
+static int    strcmp(const char *a, const char *b);
+
+/* Apps minimas inline en este modulo (paso 4). */
+static void cat_main(int argc, char **argv);
+static void wc_main(int argc, char **argv);
 
 static Command commands[] = {
-    {"help", help},
-    {"clear", clear},
-    {"printTime", printTime},
-    {"printDate", printDate},
-    {"registers", registers},
-    {"testDiv0", divideByZero},
-    {"invOp", invOp},
-    {"playBeep", playBeep},
-    {"bmFPS", bmFPS},
-    {"bmCPU", bmCPU},
-    {"bmMEM", bmMEM},
-    {"bmKEY", bmKEY},
-    {"test_mm", testMM},
-    {"test_proc", test_proc},
-    {"test_prio", test_prio},
-    {"test_sync", test_sync_cmd},
-    {"ps", ps},
-    {0, 0},
+    /* Builtins: corren sincronicamente en la shell. No admiten & ni |. */
+    {"help",      help,                 0,             "muestra esta ayuda"},
+    {"clear",     clear,                0,             "limpia la pantalla"},
+    {"printTime", printTime,            0,             "imprime la hora actual"},
+    {"printDate", printDate,            0,             "imprime la fecha actual"},
+    {"registers", registers,            0,             "imprime registros (CTRL para capturar)"},
+    {"testDiv0",  divideByZero,         0,             "dispara excepcion #DE"},
+    {"invOp",     invOp,                0,             "dispara invalid opcode"},
+    {"playBeep",  playBeep,             0,             "reproduce una secuencia de beeps"},
+    {"bmFPS",     bmFPS,                0,             "benchmark de FPS"},
+    {"bmCPU",     bmCPU,                0,             "benchmark de CPU"},
+    {"bmMEM",     bmMEM,                0,             "benchmark de memoria"},
+    {"bmKEY",     bmKEY,                0,             "mide latencia de tecla"},
+    {"ps",        ps,                   0,             "lista los procesos activos"},
+    /* Procesos: la shell los lanza con sys_create_process. Admiten & y |. */
+    {"test_mm",   0,        test_mm_main,    "<max>     test del memory manager"},
+    {"test_proc", 0,        test_proc_main,  "<max>     test de procesos"},
+    {"test_prio", 0,        test_prio_main,  "<target>  test de prioridades"},
+    {"test_sync", 0,        test_sync_main,  "<n> <s>   test de sincronizacion"},
+    {"cat",       0,        cat_main,        "copia stdin a stdout hasta EOF"},
+    {"wc",        0,        wc_main,         "cuenta lineas en stdin"},
+    {0, 0, 0, 0},
 };
 
-/* Argumentos del comando actual: lo setea processLine antes de invocar al
-   comando, y se accede via cmd_args(). NULL si no hay argumentos. */
+/* Argumentos del comando actual (compat). cmd_args() devuelve la string
+** completa post-primer espacio o NULL. Solo lo setean los builtins via shell. */
 static const char *g_cmd_args = 0;
 
 const char *cmd_args(void){
     return g_cmd_args;
+}
+
+/* ── Apps inline ─────────────────────────────────────────────────────────── */
+
+/* cat: copia stdin (fd[0]) a stdout (fd[1]) hasta EOF (sys_read retorna 0). */
+static void cat_main(int argc, char **argv){
+    (void)argc; (void)argv;
+    char buf[128];
+    uint64_t n;
+    while((n = sys_read(buf, sizeof(buf))) > 0){
+        sys_write(STDOUT, buf, n);
+    }
+    sys_exit(0);
+}
+
+/* wc: cuenta lineas en stdin hasta EOF y reporta el total. */
+static void wc_main(int argc, char **argv){
+    (void)argc; (void)argv;
+    char buf[128];
+    uint64_t n;
+    uint64_t lines = 0;
+    while((n = sys_read(buf, sizeof(buf))) > 0){
+        for(uint64_t i = 0; i < n; i++){
+            if(buf[i] == '\n') lines++;
+        }
+    }
+    char out[24];
+    uint64_t len = num_to_str(lines, out, 10);
+    out[len] = '\n';
+    sys_write(STDOUT, out, len + 1);
+    sys_exit(0);
 }
 
 
@@ -334,28 +378,23 @@ void shellDecreaseFontSize(){
     redrawFont();
 }
 
-// Lista de comandos disponibles
+// Lista de comandos disponibles, generada desde la tabla commands[].
 void help(){
-    shellPrintString("Comandos disponibles: \n");
-    shellPrintString("help      ->   muestra la lista de comandos.\n");
-    shellPrintString("clear     ->   limpia la pantalla.\n");
-    shellPrintString("+         ->   aumenta tamaño de fuente.\n");
-    shellPrintString("-         ->   disminuye tamaño de fuente.\n");
-    shellPrintString("printTime ->   imprime la hora actual.\n");
-    shellPrintString("printDate ->   imprime la fecha actual.\n");
-    shellPrintString("registers ->   imprime registros.\n");
-    shellPrintString("testDiv0  ->   division por cero.\n");
-    shellPrintString("invOp     ->   instruccion invalida.\n");
-    shellPrintString("playBeep  ->   reproduce un beep.\n");
-    shellPrintString("bmFPS     ->   benchmark de FPS.\n");
-    shellPrintString("bmCPU     ->   benchmark de CPU.\n");
-    shellPrintString("bmMEM     ->   benchmark de MEM.\n");
-    shellPrintString("bmKEY     ->   benchmark de teclado.\n");
-    shellPrintString("test_mm <max_memory>      ->   test del memory manager (loop infinito).\n");
-    shellPrintString("test_proc <max>           ->   test de procesos (loop infinito).\n");
-    shellPrintString("test_prio <target>        ->   test de prioridades (3 fases, termina solo).\n");
-    shellPrintString("test_sync <n> <use_sem>   ->   test de sincronizacion con semaforos.\n");
-    shellPrintString("ps                        ->   lista de procesos activos.\n");
+    shellPrintString("Comandos disponibles:\n");
+    for(int i = 0; commands[i].name != 0; i++){
+        shellPrintString("  ");
+        shellPrintString(commands[i].name);
+        /* padding hasta columna 12 */
+        int pad = 12 - (int)strlen(commands[i].name);
+        for(int j = 0; j < pad; j++) shellPrintString(" ");
+        shellPrintString(commands[i].description ? (char *)commands[i].description : "");
+        shellPrintString("\n");
+    }
+    shellPrintString("Operadores:\n");
+    shellPrintString("  cmd &        ejecuta en background\n");
+    shellPrintString("  cmd1 | cmd2  pipe (ambos comandos deben ser procesos)\n");
+    shellPrintString("  Ctrl+C       mata el proceso foreground actual\n");
+    shellPrintString("  Ctrl+D       envia EOF al stdin\n");
 }
 
 // Limpia la pantalla
@@ -515,38 +554,230 @@ char getchar(){
     return c;
 }
 
-// Busca y ejecuta el comando ingresado. Si el comando tiene argumentos
-// separados por espacio (e.g. "test_proc 5"), los expone via cmd_args().
-void processLine(char * buff, uint32_t * history_len){
-    (void)history_len;
-    if(strlen(buff) == 0){
+/* ── Parser de la shell ───────────────────────────────────────────────────── */
+
+#define MAX_ARGS 16
+
+/* Tokeniza `line` in-place: inserta NULs y llena argv[]. Devuelve argc. */
+static int tokenize(char *line, char *argv[], int max){
+    int argc = 0;
+    char *p = line;
+    while(*p && argc < max - 1){
+        while(*p == ' ' || *p == '\t') p++;
+        if(!*p) break;
+        argv[argc++] = p;
+        while(*p && *p != ' ' && *p != '\t') p++;
+        if(*p) *p++ = '\0';
+    }
+    argv[argc] = 0;
+    return argc;
+}
+
+static Command *find_cmd(const char *name){
+    for(int i = 0; commands[i].name != 0; i++){
+        if(strcmp(commands[i].name, name) == 0) return &commands[i];
+    }
+    return 0;
+}
+
+/* Duplica argv (apuntadores + strings) en un solo bloque heap. Usado para
+** procesos background, ya que el buff de la shell se reescribe en el
+** proximo readline. Layout: [char*[argc]] | [strings concatenadas].
+** Retorna NULL si no hay memoria. El bloque queda en leak (proceso bg). */
+static char **dup_argv(int argc, char **argv){
+    if(argc <= 0) return 0;
+    uint64_t strs = 0;
+    for(int i = 0; i < argc; i++) strs += strlen(argv[i]) + 1;
+    uint64_t header = sizeof(char *) * (uint64_t)argc;
+    char **out = (char **)sys_malloc(header + strs);
+    if(!out) return 0;
+    char *dst = (char *)out + header;
+    for(int i = 0; i < argc; i++){
+        out[i] = dst;
+        const char *src = argv[i];
+        while((*dst++ = *src++))
+            ;
+    }
+    return out;
+}
+
+/* Spawnea un proceso entry con los args dados. Para fg, hace waitpid y libera
+** el bloque argv heap. Para bg, deja correr y reporta el PID. */
+static void spawn_simple(Command *c, int argc, char **argv, uint8_t fg){
+    char **owned_argv = dup_argv(argc, argv);
+    if(argc > 0 && owned_argv == 0){
+        shellPrintString("error: sin memoria\n");
+        return;
+    }
+    int64_t pid = sys_create_process(c->name, (void *)c->entry,
+                                     argc, owned_argv, fg);
+    if(pid <= 0){
+        shellPrintString("error: no se pudo crear proceso\n");
+        if(owned_argv) sys_free(owned_argv);
+        return;
+    }
+    if(fg){
+        sys_waitpid((uint64_t)pid);
+        if(owned_argv) sys_free(owned_argv);
+    } else {
+        /* bg: leak intencional de owned_argv hasta el fin del kernel. */
+        char numbuf[16];
+        num_to_str((uint64_t)pid, numbuf, 10);
+        shellPrintString("[bg] pid ");
+        shellPrintString(numbuf);
+        shellPrintString("\n");
+    }
+}
+
+/* Spawnea dos procesos conectados por un pipe. Foreground espera ambos. */
+static void spawn_pipe(Command *c1, int argc1, char **argv1,
+                       Command *c2, int argc2, char **argv2, uint8_t fg){
+    int fds[2];
+    if(sys_pipe(fds) < 0){
+        shellPrintString("error: no se pudo crear pipe\n");
         return;
     }
 
-    /* Cortar al primer espacio: nombre del comando | resto = argumentos. */
-    g_cmd_args = 0;
-    for(size_t i = 0; buff[i]; i++){
-        if(buff[i] == ' '){
-            buff[i] = '\0';
-            size_t j = i + 1;
-            while(buff[j] == ' ') j++;
-            if(buff[j] != '\0'){
-                g_cmd_args = &buff[j];
-            }
-            break;
-        }
+    char **a1 = dup_argv(argc1, argv1);
+    char **a2 = dup_argv(argc2, argv2);
+    if((argc1 > 0 && !a1) || (argc2 > 0 && !a2)){
+        shellPrintString("error: sin memoria\n");
+        if(a1) sys_free(a1);
+        if(a2) sys_free(a2);
+        sys_pipe_close(fds[0]);
+        sys_pipe_close(fds[1]);
+        return;
     }
 
-    for(int i = 0; commands[i].name != 0; i++){
-        if(strcmp(buff, commands[i].name) == 0){
-            commands[i].function();
-            g_cmd_args = 0;
+    /* Empaque: fg (8b) | fd_in (16b) | fd_out (16b) */
+    uint64_t pack1 = (uint64_t)fg
+                   | ((uint64_t)(uint16_t)0       << 16)
+                   | ((uint64_t)(uint16_t)fds[1]  << 32);
+    uint64_t pack2 = (uint64_t)fg
+                   | ((uint64_t)(uint16_t)fds[0]  << 16)
+                   | ((uint64_t)(uint16_t)1       << 32);
+
+    int64_t pid1 = sys_create_process_fd(c1->name, (void *)c1->entry,
+                                         argc1, a1, pack1);
+    int64_t pid2 = sys_create_process_fd(c2->name, (void *)c2->entry,
+                                         argc2, a2, pack2);
+
+    /* Cerrar los extremos del padre: los hijos heredaron sus copias. */
+    sys_pipe_close(fds[0]);
+    sys_pipe_close(fds[1]);
+
+    if(pid1 <= 0 || pid2 <= 0){
+        shellPrintString("error: no se pudo crear algun hijo del pipe\n");
+        if(pid1 > 0) sys_kill((uint64_t)pid1);
+        if(pid2 > 0) sys_kill((uint64_t)pid2);
+    }
+
+    if(fg){
+        if(pid2 > 0) sys_waitpid((uint64_t)pid2);
+        /* Si pid2 murio (e.g. Ctrl+C), matamos pid1 explicitamente por si
+        ** estuviera en un loop sin IO que no detecte el broken pipe. */
+        if(pid1 > 0) sys_kill((uint64_t)pid1);
+        if(pid1 > 0) sys_waitpid((uint64_t)pid1);
+        if(a1) sys_free(a1);
+        if(a2) sys_free(a2);
+    } else {
+        char numbuf[16];
+        num_to_str((uint64_t)pid1, numbuf, 10);
+        shellPrintString("[bg] pid ");
+        shellPrintString(numbuf);
+        shellPrintString(" | ");
+        num_to_str((uint64_t)pid2, numbuf, 10);
+        shellPrintString(numbuf);
+        shellPrintString("\n");
+    }
+}
+
+/* Parsea una linea de shell con soporte para '&' (background) y '|' (pipe). */
+void processLine(char * buff, uint32_t * history_len){
+    (void)history_len;
+    size_t L = strlen(buff);
+    if(L == 0) return;
+
+    /* Trim trailing spaces. */
+    while(L > 0 && buff[L-1] == ' ') buff[--L] = '\0';
+    if(L == 0) return;
+
+    /* Trailing '&' → background. */
+    uint8_t fg = 1;
+    if(buff[L-1] == '&'){
+        fg = 0;
+        buff[--L] = '\0';
+        while(L > 0 && buff[L-1] == ' ') buff[--L] = '\0';
+        if(L == 0){ shellPrintString("error: '&' sin comando\n"); return; }
+    }
+
+    /* Buscar '|' (un solo pipe soportado). */
+    char *pipe_pos = 0;
+    for(size_t i = 0; buff[i]; i++){
+        if(buff[i] == '|'){ pipe_pos = &buff[i]; break; }
+    }
+
+    if(pipe_pos != 0){
+        *pipe_pos = '\0';
+        char *left  = buff;
+        char *right = pipe_pos + 1;
+
+        char *argv_l[MAX_ARGS], *argv_r[MAX_ARGS];
+        int argc_l = tokenize(left,  argv_l, MAX_ARGS);
+        int argc_r = tokenize(right, argv_r, MAX_ARGS);
+        if(argc_l == 0 || argc_r == 0){
+            shellPrintString("error: pipe con lado vacio\n");
             return;
         }
+        Command *c1 = find_cmd(argv_l[0]);
+        Command *c2 = find_cmd(argv_r[0]);
+        if(!c1 || !c2){
+            shellPrintString("Comando no reconocido en pipe.\n");
+            return;
+        }
+        if(c1->entry == 0 || c2->entry == 0){
+            shellPrintString("error: ambos lados del pipe deben ser procesos\n");
+            return;
+        }
+        spawn_pipe(c1, argc_l - 1, argv_l + 1,
+                   c2, argc_r - 1, argv_r + 1, fg);
+        return;
     }
 
-    g_cmd_args = 0;
-    shellPrintString("Comando no reconocido! Escriba 'help' para ver los comandos disponibles.\n");
+    /* Comando simple. */
+    char *argv[MAX_ARGS];
+    int argc = tokenize(buff, argv, MAX_ARGS);
+    if(argc == 0) return;
+
+    Command *c = find_cmd(argv[0]);
+    if(!c){
+        shellPrintString("Comando no reconocido! Escriba 'help' para ver los comandos disponibles.\n");
+        return;
+    }
+
+    if(c->builtin != 0){
+        if(!fg){
+            shellPrintString("error: los builtins no admiten '&'\n");
+            return;
+        }
+        /* Compat: exponer la string completa post-primer-espacio via cmd_args(). */
+        g_cmd_args = 0;
+        if(argc > 1){
+            /* argv[1] apunta dentro del buff original; el byte previo fue
+            ** sobrescrito con '\0' por tokenize. Restaurarlo a ' ' para
+            ** reconstruir la string original. */
+            for(int k = 1; k < argc; k++){
+                if(k > 1) *(argv[k] - 1) = ' ';
+            }
+            g_cmd_args = argv[1];
+        }
+        c->builtin();
+        g_cmd_args = 0;
+        return;
+    }
+
+    /* Proceso. */
+    spawn_simple(c, argc - 1, argv + 1, fg);
 }
 
 static const char *state_names[] = {"FREE", "READY", "RUNNING", "BLOCKED", "ZOMBIE"};

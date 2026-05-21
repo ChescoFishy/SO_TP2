@@ -35,6 +35,8 @@ static char buff[BUFF_LENGTH];
 static char registersBuff[REGISTERS_BUFFER_SIZE];
 static int shift = 0;
 static int caps = 0;
+static int ctrl = 0;
+static int eof_pending = 0;
 static int buff_size = 0;
 static int start_index = 0;
 static int end_index = 0;
@@ -82,6 +84,16 @@ uint64_t readKeyBuff(char * buff, uint64_t count){
     return i;
 }
 
+/* Consume y retorna el flag EOF (Ctrl+D). sys_read lo consulta cuando el
+** buffer esta vacio para devolver 0 (EOF) en vez de bloquear. */
+int kbd_consume_eof(void){
+    if(eof_pending && buff_size == 0){
+        eof_pending = 0;
+        return 1;
+    }
+    return 0;
+}
+
 // Traduce el scancode leído por la ISR y lo almacena en el buffer
 void handlePressedKey(void){
     uint8_t scancode = kbd_scancode_read();
@@ -90,16 +102,41 @@ void handlePressedKey(void){
         shift = 1;
     } else if(scancode == (L_SHIFT | BREAK_CODE) || scancode == (R_SHIFT | BREAK_CODE)){
         shift = 0;
+    } else if(scancode == (L_CONTROL | BREAK_CODE)){
+        ctrl = 0;
+        return;
     }else if(scancode == L_ARROW || scancode == R_ARROW || scancode == UP_ARROW || scancode == DOWN_ARROW || scancode == 0 || scancode > BREAK_CODE){
         return;
     } else if(scancode == L_CONTROL){
+        /* Press de Ctrl: snapshot de registros (uso original) + marcar modifier
+        ** para que la siguiente tecla pueda ser tratada como Ctrl+letra. */
         storeSnapshot();
         boolRegisters = 1;
+        ctrl = 1;
         return;
     } else if(scancode == CAPS_LOCK){
         caps = !caps;
     } else if(!(scancode & BREAK_CODE)){
         char c = kbd_manager[(shift + caps) % 2][scancode];
+
+        if(ctrl){
+            /* Ctrl+C → kill al proceso foreground. */
+            if(c == 'c' || c == 'C'){
+                uint64_t fg = process_get_foreground();
+                if(fg != 0) process_kill(fg);
+                return;
+            }
+            /* Ctrl+D → EOF; despierta al lector si estaba bloqueado. */
+            if(c == 'd' || c == 'D'){
+                eof_pending = 1;
+                if(kbd_waiting_process != NULL){
+                    kbd_waiting_process->state = PROCESS_READY;
+                    kbd_waiting_process = NULL;
+                }
+                return;
+            }
+        }
+
         writeBuff(c);
 
         // Despertar al proceso que esperaba input

@@ -10,10 +10,16 @@
 #define BUFF_LENGTH 100
 
 typedef void (*Runnable)(void);
+typedef void (*ProcessMain)(int argc, char **argv);
 
+/* Comando de la shell. Uno solo de los dos punteros debe ser != NULL:
+**   builtin  != NULL → se ejecuta sincronicamente en la shell (no admite & ni |).
+**   entry    != NULL → la shell lo lanza con sys_create_process (admite & y |). */
 typedef struct Command{
-     char* name;
-     Runnable function;
+     char        *name;
+     Runnable     builtin;
+     ProcessMain  entry;
+     const char  *description;
 } Command;
 
 void shellPrintString(char *str);

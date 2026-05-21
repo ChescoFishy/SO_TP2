@@ -56,13 +56,12 @@ static void test_mm_loop(uint64_t max_memory) {
     }
 }
 
-/* argv apunta al inicio de un bloque heap [char*[1]][string]; el child lo libera. */
+/* Entry point como proceso: la shell pasa argv via sys_create_process y se
+** encarga de su lifetime (free post-waitpid). El child no debe liberarlo. */
 void test_mm_main(int argc, char **argv) {
-    void *argv_buf = argv;
     int64_t max_memory = -1;
     if (argc >= 1 && argv != 0 && argv[0] != 0)
         max_memory = satoi(argv[0]);
-    sys_free(argv_buf);
 
     if (max_memory <= 0) {
         printf("uso: test_mm <max_memory>\n");

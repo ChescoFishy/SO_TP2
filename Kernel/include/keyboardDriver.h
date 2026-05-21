@@ -19,4 +19,7 @@ uint8_t kbd_scancode_read(void);
 struct PCB;
 void kbd_set_waiting(struct PCB *p);
 
+/* Indica si hay un EOF pendiente (Ctrl+D) y lo consume si lo hay. */
+int kbd_consume_eof(void);
+
 #endif

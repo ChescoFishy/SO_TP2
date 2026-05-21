@@ -73,6 +73,10 @@ uint64_t sys_read(char * buff, uint64_t count){
 
     uint64_t n = readKeyBuff(buff, count);
     if (n == 0) {
+        /* Si hay un EOF pendiente (Ctrl+D), reportarlo y no bloquear. */
+        if (kbd_consume_eof()) {
+            return 0;
+        }
         if (cur != NULL) {
             kbd_set_waiting(cur);
             cur->state = PROCESS_BLOCKED;

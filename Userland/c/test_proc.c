@@ -86,18 +86,17 @@ static int64_t test_processes(uint64_t argc, char *argv[]) {
     }
 }
 
-/* argv apunta al inicio de un bloque heap [char*[1]][string]; el child lo libera. */
+/* Entry point como proceso: la shell pasa argv via sys_create_process y se
+** encarga de su lifetime (free post-waitpid). El child no debe liberarlo. */
 void test_proc_main(int argc, char **argv) {
-    void *argv_buf = argv;
-    char  num_buf[24];
-    int   ok = 0;
+    char num_buf[24];
+    int  ok = 0;
     if (argc >= 1 && argv != 0 && argv[0] != 0) {
         uint64_t i = 0;
         while (argv[0][i] && i < sizeof(num_buf) - 1) { num_buf[i] = argv[0][i]; i++; }
         num_buf[i] = '\0';
         ok = 1;
     }
-    sys_free(argv_buf);
 
     if (!ok) {
         printf("uso: test_proc <max_processes>\n");

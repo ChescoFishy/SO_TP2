@@ -64,4 +64,8 @@ void process_nice(uint64_t pid, uint8_t new_priority);
 int process_waitpid(uint64_t pid);
 uint64_t process_ps(ProcessInfo *buf, uint64_t max);
 
+/* Devuelve el PID del ultimo proceso foreground creado por la shell.
+** 0 si no hay ninguno vivo. Lo usa el driver de teclado para Ctrl+C. */
+uint64_t process_get_foreground(void);
+
 #endif
