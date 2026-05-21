@@ -152,6 +152,11 @@ int process_create_fd(const char *name, ProcessEntry entry, int argc, char **arg
     p->foreground = fg;
     p->fd[0] = fd_in;
     p->fd[1] = fd_out;
+    /* Heredar refcount de pipes: el padre creó/abrió el pipe y le pasó el fd
+    ** al hijo. Bumpeamos para que el cierre del padre no libere el pipe antes
+    ** de que el hijo termine de usarlo. */
+    if(pipe_is_fd(fd_in))  pipe_inherit_fd(fd_in);
+    if(pipe_is_fd(fd_out)) pipe_inherit_fd(fd_out);
     p->parent_pid = ((current_process != NULL) ? (current_process->pid) : 0);
     p->waiting_for = 0;
     p->argc = argc;
@@ -231,9 +236,9 @@ void process_kill(uint64_t pid){
     /* Despertar padre si estaba esperando este proceso. */
     PCB *parent = process_get(p->parent_pid);
     if(parent != NULL && parent->state == PROCESS_BLOCKED && parent->waiting_for == pid){
-        /* Escribir el retval directamente en el RAX guardado del padre. 
-        ** El valor -1 indica que el proceso fue matado. */ 
-        parent->rsp[14] = (uint64_t)(uint32_t)(-1); // ?¿
+        /* Escribir el retval directamente en el RAX guardado del padre.
+        ** Sign-extender a 64 bits para que userland reciba -1 como int64_t. */
+        parent->rsp[14] = (uint64_t)(int64_t)(-1);
         parent->waiting_for = 0;
         parent->state = PROCESS_READY;
     }

@@ -86,25 +86,53 @@ static int64_t test_processes(uint64_t argc, char *argv[]) {
     }
 }
 
-/* Entry point como proceso: test_proc <max_processes> */
+/* argv apunta al inicio de un bloque heap [char*[1]][string]; el child lo libera. */
 void test_proc_main(int argc, char **argv) {
-    if (argc < 1 || argv == 0 || argv[0] == 0) {
+    void *argv_buf = argv;
+    char  num_buf[24];
+    int   ok = 0;
+    if (argc >= 1 && argv != 0 && argv[0] != 0) {
+        uint64_t i = 0;
+        while (argv[0][i] && i < sizeof(num_buf) - 1) { num_buf[i] = argv[0][i]; i++; }
+        num_buf[i] = '\0';
+        ok = 1;
+    }
+    sys_free(argv_buf);
+
+    if (!ok) {
         printf("uso: test_proc <max_processes>\n");
         sys_exit(-1);
     }
-    char *args[1] = {argv[0]};
+    char *args[1] = {num_buf};
     test_processes(1, args);
     sys_exit(0);
 }
 
-/* Wrapper de shell: crea test_proc como proceso foreground y espera. */
+/* Crea test_proc como proceso (foreground + waitpid). Heap-copy de argv para
+** que tambien funcione en background. */
 void test_proc(void) {
     const char *args = cmd_args();
     if (!args) {
         shellPrintString("uso: test_proc <max_processes>\n");
         return;
     }
-    char *argv[1] = {(char *)args};
+
+    uint64_t len = 0;
+    while (args[len]) len++;
+    char **argv = (char **)sys_malloc(sizeof(char *) + len + 1);
+    if (!argv) {
+        shellPrintString("test_proc: sin memoria\n");
+        return;
+    }
+    char *s = (char *)(argv + 1);
+    for (uint64_t i = 0; i <= len; i++) s[i] = args[i];
+    argv[0] = s;
+
     int64_t pid = sys_create_process("test_proc", test_proc_main, 1, argv, 1);
-    if (pid > 0) sys_waitpid((uint64_t)pid);
+    if (pid <= 0) {
+        shellPrintString("test_proc: error creando proceso\n");
+        sys_free(argv);
+        return;
+    }
+    sys_waitpid((uint64_t)pid);
 }

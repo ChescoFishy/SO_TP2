@@ -12,12 +12,12 @@
 
 static int64_t prio[TOTAL_PROCESSES] = {LOWEST, MEDIUM, HIGHEST};
 
-static uint64_t max_value = 0;
-
-/* Proceso worker: cuenta de 0 a max_value e imprime su PID al terminar.
+/* Proceso worker: cuenta de 0 a max_value (argv[0]) e imprime su PID al terminar.
    No-static para que el registro de syscall.c pueda referenciarla. */
 void zero_to_max(int argc, char *argv[]) {
-    (void)argc; (void)argv;
+    if (argc < 1 || argv == 0 || argv[0] == 0)
+        return;
+    uint64_t max_value = (uint64_t)satoi(argv[0]);
     uint64_t value = 0;
     while (value++ != max_value)
         ;
@@ -26,20 +26,23 @@ void zero_to_max(int argc, char *argv[]) {
 
 static int64_t test_prio_internal(uint64_t argc, char *argv[]) {
     int64_t pids[TOTAL_PROCESSES];
-    char   *ztm_argv[] = {0};
     uint64_t i;
 
     if (argc != 1)
         return -1;
 
-    if ((max_value = (uint64_t)satoi(argv[0])) == 0)
+    if ((uint64_t)satoi(argv[0]) == 0)
         return -1;
+
+    /* argv[0] vive en el stack de este proceso hasta que retorna test_prio_internal,
+    ** y todos los workers son esperados antes del return → pasaje seguro. */
+    char *ztm_argv[1] = {argv[0]};
 
     /* ── Fase 1: misma prioridad ─────────────────────────────────────────── */
     printf("SAME PRIORITY...\n");
 
     for (i = 0; i < TOTAL_PROCESSES; i++)
-        pids[i] = my_create_process("zero_to_max", 0, ztm_argv);
+        pids[i] = my_create_process("zero_to_max", 1, ztm_argv);
 
     for (i = 0; i < TOTAL_PROCESSES; i++)
         my_wait(pids[i]);
@@ -48,7 +51,7 @@ static int64_t test_prio_internal(uint64_t argc, char *argv[]) {
     printf("SAME PRIORITY, THEN CHANGE IT...\n");
 
     for (i = 0; i < TOTAL_PROCESSES; i++) {
-        pids[i] = my_create_process("zero_to_max", 0, ztm_argv);
+        pids[i] = my_create_process("zero_to_max", 1, ztm_argv);
         my_nice((uint64_t)pids[i], (uint64_t)prio[i]);
         printf("  PROCESS %d NEW PRIORITY: %d\n", (int)pids[i], (int)prio[i]);
     }
@@ -60,7 +63,7 @@ static int64_t test_prio_internal(uint64_t argc, char *argv[]) {
     printf("SAME PRIORITY, THEN CHANGE IT WHILE BLOCKED...\n");
 
     for (i = 0; i < TOTAL_PROCESSES; i++) {
-        pids[i] = my_create_process("zero_to_max", 0, ztm_argv);
+        pids[i] = my_create_process("zero_to_max", 1, ztm_argv);
         my_block((uint64_t)pids[i]);
         my_nice((uint64_t)pids[i], (uint64_t)prio[i]);
         printf("  PROCESS %d NEW PRIORITY: %d\n", (int)pids[i], (int)prio[i]);

@@ -16,5 +16,8 @@ int     pipe_close(int fd);
 int64_t pipe_read(int fd, char *buf, uint64_t n);
 int64_t pipe_write(int fd, const char *buf, uint64_t n);
 int     pipe_is_fd(int fd);
+/* Incrementa readers/writers cuando un nuevo proceso hereda un extremo del pipe
+** (fork-style). El close correspondiente lo decrementa. */
+int     pipe_inherit_fd(int fd);
 
 #endif

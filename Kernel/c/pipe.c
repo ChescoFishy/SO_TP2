@@ -1,5 +1,6 @@
 #include "pipe.h"
 #include "semaphore.h"
+#include "process.h"   /* MAX_PROCESSES para fan-out de wakeups */
 #include <stddef.h>
 
 typedef struct {
@@ -82,6 +83,18 @@ void pipe_init(void) {
 int pipe_is_fd(int fd) {
     return (fd >= PIPE_FD_READ_BASE && fd < PIPE_FD_READ_BASE + MAX_PIPES) ||
            (fd >= PIPE_FD_WRITE_BASE && fd < PIPE_FD_WRITE_BASE + MAX_PIPES);
+}
+
+/* Cuando un proceso hijo hereda un extremo del pipe via process_create_fd,
+** bumpear el contador correspondiente. Simétrico a pipe_close. */
+int pipe_inherit_fd(int fd) {
+    int idx = fd_to_index(fd);
+    if (idx < 0) return -1;
+    Pipe *p = &pipes[idx];
+    if (!p->in_use) return -1;
+    if (fd_is_write(fd)) p->writers++;
+    else                 p->readers++;
+    return 0;
 }
 
 int pipe_create(int fds[2]) {
@@ -177,12 +190,21 @@ int pipe_close(int fd) {
 
     if (fd_is_write(fd)) {
         if (p->writers > 0) p->writers--;
-        /* despertar a todos los readers bloqueados para que vean EOF */
-        if (p->writers == 0) sem_broadcast(p->data_sem);
+        /* Cuando ya no hay writers, posteamos MAX_PROCESSES veces sobre data_sem.
+        ** Eso despierta a los readers actualmente bloqueados (sem_post wake-one)
+        ** y deja "tokens" suficientes para cerrar la ventana de carrera entre
+        ** el chequeo `writers == 0` de pipe_read y su sem_wait posterior. */
+        if (p->writers == 0) {
+            int k;
+            for (k = 0; k < MAX_PROCESSES; k++) sem_post(p->data_sem);
+        }
     } else {
         if (p->readers > 0) p->readers--;
-        /* despertar a todos los writers bloqueados (verán broken pipe) */
-        if (p->readers == 0) sem_broadcast(p->space_sem);
+        /* Mismo esquema para writers bloqueados (verán broken pipe). */
+        if (p->readers == 0) {
+            int k;
+            for (k = 0; k < MAX_PROCESSES; k++) sem_post(p->space_sem);
+        }
     }
 
     if (p->readers == 0 && p->writers == 0) {

@@ -56,13 +56,14 @@ static void test_mm_loop(uint64_t max_memory) {
     }
 }
 
-/* Entry point como proceso: test_mm <max_memory> */
+/* argv apunta al inicio de un bloque heap [char*[1]][string]; el child lo libera. */
 void test_mm_main(int argc, char **argv) {
-    if (argc < 1 || argv == 0 || argv[0] == 0) {
-        printf("uso: test_mm <max_memory>\n");
-        sys_exit(-1);
-    }
-    int64_t max_memory = satoi(argv[0]);
+    void *argv_buf = argv;
+    int64_t max_memory = -1;
+    if (argc >= 1 && argv != 0 && argv[0] != 0)
+        max_memory = satoi(argv[0]);
+    sys_free(argv_buf);
+
     if (max_memory <= 0) {
         printf("uso: test_mm <max_memory>\n");
         sys_exit(-1);
@@ -71,14 +72,31 @@ void test_mm_main(int argc, char **argv) {
     sys_exit(0);
 }
 
-/* Wrapper de shell: crea test_mm como proceso foreground y espera. */
+/* Crea test_mm como proceso (foreground + waitpid). El buffer argv vive en el
+** heap y lo libera el child, asi que es seguro tambien para background. */
 void testMM(void) {
     const char *args = cmd_args();
     if (!args) {
         shellPrintString("uso: test_mm <max_memory>\n");
         return;
     }
-    char *argv[1] = {(char *)args};
+
+    uint64_t len = 0;
+    while (args[len]) len++;
+    char **argv = (char **)sys_malloc(sizeof(char *) + len + 1);
+    if (!argv) {
+        shellPrintString("test_mm: sin memoria\n");
+        return;
+    }
+    char *s = (char *)(argv + 1);
+    for (uint64_t i = 0; i <= len; i++) s[i] = args[i];
+    argv[0] = s;
+
     int64_t pid = sys_create_process("test_mm", test_mm_main, 1, argv, 1);
-    if (pid > 0) sys_waitpid((uint64_t)pid);
+    if (pid <= 0) {
+        shellPrintString("test_mm: error creando proceso\n");
+        sys_free(argv);
+        return;
+    }
+    sys_waitpid((uint64_t)pid);
 }
