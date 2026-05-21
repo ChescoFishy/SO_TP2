@@ -3,9 +3,6 @@
 
 #include <stdint.h>
 
-void test_sync_cmd(void);
-
-/* Entry point como proceso. */
 void test_sync_main(int argc, char **argv);
 
 /* Entry point de proceso worker. No-static para el registro de syscall.c.

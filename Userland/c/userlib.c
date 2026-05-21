@@ -12,7 +12,6 @@
 static size_t strlen(const char *s);
 static int    strcmp(const char *a, const char *b);
 
-/* Apps minimas inline en este modulo (paso 4). */
 static void cat_main(int argc, char **argv);
 static void wc_main(int argc, char **argv);
 
@@ -49,9 +48,6 @@ const char *cmd_args(void){
     return g_cmd_args;
 }
 
-/* ── Apps inline ─────────────────────────────────────────────────────────── */
-
-/* cat: copia stdin (fd[0]) a stdout (fd[1]) hasta EOF (sys_read retorna 0). */
 static void cat_main(int argc, char **argv){
     (void)argc; (void)argv;
     char buf[128];
@@ -649,7 +645,6 @@ static void spawn_pipe(Command *c1, int argc1, char **argv1,
         return;
     }
 
-    /* Empaque: fg (8b) | fd_in (16b) | fd_out (16b) */
     uint64_t pack1 = (uint64_t)fg
                    | ((uint64_t)(uint16_t)0       << 16)
                    | ((uint64_t)(uint16_t)fds[1]  << 32);
@@ -662,7 +657,6 @@ static void spawn_pipe(Command *c1, int argc1, char **argv1,
     int64_t pid2 = sys_create_process_fd(c2->name, (void *)c2->entry,
                                          argc2, a2, pack2);
 
-    /* Cerrar los extremos del padre: los hijos heredaron sus copias. */
     sys_pipe_close(fds[0]);
     sys_pipe_close(fds[1]);
 
@@ -674,10 +668,12 @@ static void spawn_pipe(Command *c1, int argc1, char **argv1,
 
     if(fg){
         if(pid2 > 0) sys_waitpid((uint64_t)pid2);
-        /* Si pid2 murio (e.g. Ctrl+C), matamos pid1 explicitamente por si
-        ** estuviera en un loop sin IO que no detecte el broken pipe. */
-        if(pid1 > 0) sys_kill((uint64_t)pid1);
-        if(pid1 > 0) sys_waitpid((uint64_t)pid1);
+        /* Si pid2 murio (e.g. Ctrl+C) y pid1 esta en un loop sin IO,
+        ** no detectaria broken pipe; lo matamos explicitamente. */
+        if(pid1 > 0){
+            sys_kill((uint64_t)pid1);
+            sys_waitpid((uint64_t)pid1);
+        }
         if(a1) sys_free(a1);
         if(a2) sys_free(a2);
     } else {

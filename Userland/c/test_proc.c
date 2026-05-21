@@ -2,7 +2,6 @@
 #include "include/syscall.h"
 #include "include/test_util.h"
 #include "include/userlib.h"
-#include "include/shell.h"
 
 enum State { RUNNING, BLOCKED, KILLED };
 
@@ -107,31 +106,3 @@ void test_proc_main(int argc, char **argv) {
     sys_exit(0);
 }
 
-/* Crea test_proc como proceso (foreground + waitpid). Heap-copy de argv para
-** que tambien funcione en background. */
-void test_proc(void) {
-    const char *args = cmd_args();
-    if (!args) {
-        shellPrintString("uso: test_proc <max_processes>\n");
-        return;
-    }
-
-    uint64_t len = 0;
-    while (args[len]) len++;
-    char **argv = (char **)sys_malloc(sizeof(char *) + len + 1);
-    if (!argv) {
-        shellPrintString("test_proc: sin memoria\n");
-        return;
-    }
-    char *s = (char *)(argv + 1);
-    for (uint64_t i = 0; i <= len; i++) s[i] = args[i];
-    argv[0] = s;
-
-    int64_t pid = sys_create_process("test_proc", test_proc_main, 1, argv, 1);
-    if (pid <= 0) {
-        shellPrintString("test_proc: error creando proceso\n");
-        sys_free(argv);
-        return;
-    }
-    sys_waitpid((uint64_t)pid);
-}

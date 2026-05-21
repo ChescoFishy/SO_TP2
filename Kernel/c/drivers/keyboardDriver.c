@@ -108,8 +108,8 @@ void handlePressedKey(void){
     }else if(scancode == L_ARROW || scancode == R_ARROW || scancode == UP_ARROW || scancode == DOWN_ARROW || scancode == 0 || scancode > BREAK_CODE){
         return;
     } else if(scancode == L_CONTROL){
-        /* Press de Ctrl: snapshot de registros (uso original) + marcar modifier
-        ** para que la siguiente tecla pueda ser tratada como Ctrl+letra. */
+        /* Press de Ctrl: tomar snapshot de registros y marcar el modifier
+        ** para detectar combos Ctrl+C / Ctrl+D en la proxima tecla. */
         storeSnapshot();
         boolRegisters = 1;
         ctrl = 1;

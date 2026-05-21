@@ -2,7 +2,6 @@
 #include "include/syscall.h"
 #include "include/test_util.h"
 #include "include/userlib.h"
-#include "include/shell.h"
 
 #define SEM_ID              "sem"
 #define TOTAL_PAIR_PROCESSES 2
@@ -92,32 +91,3 @@ void test_sync_main(int argc, char **argv) {
     sys_exit(0);
 }
 
-/* Wrapper de shell: crea test_sync como proceso foreground y espera. */
-void test_sync_cmd(void) {
-    const char *args = cmd_args();
-    if (!args) {
-        shellPrintString("uso: test_sync <n> <use_sem>\n");
-        return;
-    }
-
-    /* Separar los dos argumentos en buf estatico (vive mientras la shell espera). */
-    static char buf[64];
-    uint64_t i = 0;
-    while (args[i] && i < 63) { buf[i] = args[i]; i++; }
-    buf[i] = '\0';
-
-    char *p = buf;
-    while (*p && *p != ' ') p++;
-    if (*p == ' ') {
-        *p = '\0';
-        p++;
-        while (*p == ' ') p++;
-    } else {
-        shellPrintString("uso: test_sync <n> <use_sem>\n");
-        return;
-    }
-
-    char *argv[2] = {buf, p};
-    int64_t pid = sys_create_process("test_sync", test_sync_main, 2, argv, 1);
-    if (pid > 0) sys_waitpid((uint64_t)pid);
-}

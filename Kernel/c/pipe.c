@@ -1,6 +1,7 @@
 #include "pipe.h"
 #include "semaphore.h"
-#include "process.h"   /* MAX_PROCESSES para fan-out de wakeups */
+#include "process.h"
+#include "naiveConsole.h"
 #include <stddef.h>
 
 typedef struct {
@@ -20,23 +21,11 @@ static Pipe pipes[MAX_PIPES];
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-static void itoa2(int n, char *out) {
-    /* n en [0, MAX_PIPES) <= 16, alcanza 2 digitos */
-    if (n < 10) {
-        out[0] = '0' + n;
-        out[1] = '\0';
-    } else {
-        out[0] = '0' + (n / 10);
-        out[1] = '0' + (n % 10);
-        out[2] = '\0';
-    }
-}
-
 static void build_name(char *out, const char *prefix, int idx) {
     int i = 0;
     while (prefix[i]) { out[i] = prefix[i]; i++; }
     char num[4];
-    itoa2(idx, num);
+    uintToBase((uint64_t)idx, num, 10);
     int j = 0;
     while (num[j]) { out[i++] = num[j++]; }
     out[i] = '\0';

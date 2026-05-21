@@ -206,41 +206,38 @@ static void close_process_pipes(PCB *p){
     }
 }
 
-/* Finaliza el proceso actual. */
-void process_exit(int retval){
-    if(current_process == NULL){
-        return;
-    }
-
-    close_process_pipes(current_process);
-
-    if(current_process->pid == fg_pid){
-        fg_pid = 0;
-    }
-
-    current_process->retval = retval;
-
-    /* El proceso finalizo su ejecucion pero no ha sido removido de la tabla de procesos.*/
-    current_process->state = PROCESS_ZOMBIE;
-    //zerebrozzzz
-
-    /* Despertar al padre si esta bloqueado en waitpid esperando este proceso. */
-    PCB* parent = process_get(current_process->parent_pid);
-    if(parent != NULL && parent->state == PROCESS_BLOCKED && parent->waiting_for == current_process->pid){
-
-        /* Escribir el retval directamente en el RAX guardado del padre. */ 
-        /* parent->rsp apunta al slot R15; el slot RAX esta 14 qwords mas arriba. */ 
-        parent->rsp[14] = (uint64_t)(int64_t)retval;
+/* parent->rsp apunta al slot R15; el slot RAX esta 14 qwords mas arriba.
+** Sign-extender retval a 64 bits para que int64_t -1 se preserve en userland. */
+static void wake_waiting_parent(PCB *p){
+    PCB *parent = process_get(p->parent_pid);
+    if(parent != NULL && parent->state == PROCESS_BLOCKED && parent->waiting_for == p->pid){
+        parent->rsp[14] = (uint64_t)(int64_t)p->retval;
         parent->waiting_for = 0;
         parent->state = PROCESS_READY;
     }
+}
 
-    /* Liberar stack del proceso que muere. */ 
+/* Limpieza comun a exit y kill: pipes, fg_pid, retval, despertar padre. */
+static void release_pcb_resources(PCB *p, int retval){
+    close_process_pipes(p);
+    if(p->pid == fg_pid) fg_pid = 0;
+    p->retval = retval;
+    wake_waiting_parent(p);
+}
+
+void process_exit(int retval){
+    if(current_process == NULL) return;
+
+    release_pcb_resources(current_process, retval);
+
+    /* El slot queda como ZOMBIE hasta que el padre haga waitpid (recoge retval).
+    ** El stack si lo liberamos ya: nadie mas lo va a usar. */
+    current_process->state = PROCESS_ZOMBIE;
     mm_free(current_process->stack_base);
     current_process->stack_base = NULL;
     current_process->rsp = NULL;
 
-    force_switch = 1;   /* Ceder CPU en el proximo retorno de syscall. */
+    force_switch = 1;
 }
 
 void process_kill(uint64_t pid){
@@ -249,23 +246,7 @@ void process_kill(uint64_t pid){
         return;
     }
 
-    close_process_pipes(p);
-
-    if(p->pid == fg_pid){
-        fg_pid = 0;
-    }
-
-    p->retval = -1;
-
-    /* Despertar padre si estaba esperando este proceso. */
-    PCB *parent = process_get(p->parent_pid);
-    if(parent != NULL && parent->state == PROCESS_BLOCKED && parent->waiting_for == pid){
-        /* Escribir el retval directamente en el RAX guardado del padre.
-        ** Sign-extender a 64 bits para que userland reciba -1 como int64_t. */
-        parent->rsp[14] = (uint64_t)(int64_t)(-1);
-        parent->waiting_for = 0;
-        parent->state = PROCESS_READY;
-    }
+    release_pcb_resources(p, -1);
 
     if(p == current_process){
         /* Se quiere matar el mismo. */

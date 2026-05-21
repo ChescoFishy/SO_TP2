@@ -2,7 +2,6 @@
 #include "include/syscall.h"
 #include "include/test_util.h"
 #include "include/userlib.h"
-#include "include/shell.h"
 
 #define MAX_BLOCKS 128
 
@@ -69,33 +68,4 @@ void test_mm_main(int argc, char **argv) {
     }
     test_mm_loop((uint64_t)max_memory);
     sys_exit(0);
-}
-
-/* Crea test_mm como proceso (foreground + waitpid). El buffer argv vive en el
-** heap y lo libera el child, asi que es seguro tambien para background. */
-void testMM(void) {
-    const char *args = cmd_args();
-    if (!args) {
-        shellPrintString("uso: test_mm <max_memory>\n");
-        return;
-    }
-
-    uint64_t len = 0;
-    while (args[len]) len++;
-    char **argv = (char **)sys_malloc(sizeof(char *) + len + 1);
-    if (!argv) {
-        shellPrintString("test_mm: sin memoria\n");
-        return;
-    }
-    char *s = (char *)(argv + 1);
-    for (uint64_t i = 0; i <= len; i++) s[i] = args[i];
-    argv[0] = s;
-
-    int64_t pid = sys_create_process("test_mm", test_mm_main, 1, argv, 1);
-    if (pid <= 0) {
-        shellPrintString("test_mm: error creando proceso\n");
-        sys_free(argv);
-        return;
-    }
-    sys_waitpid((uint64_t)pid);
 }

@@ -2,7 +2,6 @@
 #include "include/syscall.h"
 #include "include/test_util.h"
 #include "include/userlib.h"
-#include "include/shell.h"
 
 #define TOTAL_PROCESSES 3
 
@@ -89,14 +88,3 @@ void test_prio_main(int argc, char **argv) {
     sys_exit(0);
 }
 
-/* Wrapper de shell: crea test_prio como proceso foreground y espera. */
-void test_prio(void) {
-    const char *args = cmd_args();
-    if (!args) {
-        shellPrintString("uso: test_prio <max_value>\n");
-        return;
-    }
-    char *argv[1] = {(char *)args};
-    int64_t pid = sys_create_process("test_prio", test_prio_main, 1, argv, 1);
-    if (pid > 0) sys_waitpid((uint64_t)pid);
-}
