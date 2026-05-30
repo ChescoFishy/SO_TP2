@@ -3,8 +3,10 @@
 > **Estado al 2026-05-30 (sincronizado con el codigo):** Pasos 0-5 completos.
 > Shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y `waitpid`; todos los comandos del
 > enunciado implementados (`help`, `mem`, `ps`, `loop`, `kill`, `nice`, `block`,
-> `cat`, `wc`, `filter`, `mvar`) y los tests como procesos. Paso 6 (verificacion
-> final + README) pendiente. Ver seccion "Bugs / pendientes conocidos" al final.
+> `cat`, `wc`, `filter`, `mvar`) y los tests como procesos. Paso 6: codigo limpio
+> (`-Wall -Wextra` sin warnings, repo sin binarios) y README completo; resta solo
+> la verificacion *runtime* en QEMU (correr los tests en fg/bg a mano). Ver
+> seccion "Bugs / pendientes conocidos" al final.
 
 ## Estado actual (heredado del TPE de Arquitectura)
 
@@ -199,20 +201,25 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 ## Paso 6 - Verificacion y limpieza final
 
 ### 6.1 Verificacion obligatoria
-- [ ] Compilar con `-Wall` y que no haya warnings. *(pendiente de verificar tras los ultimos cambios)*
-- [ ] Correr `test_mm` en foreground y background -> sin errores.
-- [ ] Correr `test_proc` en foreground y background -> sin errores. *(riesgo por bug #1)*
-- [ ] Correr `test_sync` en foreground y background -> resultado 0 con semaforos.
-- [ ] Correr `test_prio` -> se visualizan diferencias de tiempo segun prioridad.
-- [ ] Verificar que el sistema este libre de deadlocks, race conditions y busy waiting.
+- [x] Compilar con `-Wall -Wextra` sin warnings, tanto FF como BUDDY (verificado).
+- [ ] Correr `test_mm` en foreground y background -> sin errores. *(requiere QEMU interactivo)*
+- [ ] Correr `test_proc` en foreground y background -> sin errores. *(bug #1 ya corregido; requiere QEMU)*
+- [ ] Correr `test_sync` en foreground y background -> resultado 0 con semaforos. *(requiere QEMU)*
+- [ ] Correr `test_prio` -> se visualizan diferencias de tiempo segun prioridad. *(requiere QEMU)*
+- [ ] Verificar a mano que no haya deadlocks/races/busy-waiting indebido. *(requiere QEMU)*
+
+> Nota: el codigo compila limpio y los bugs de logica detectados estan corregidos,
+> pero la verificacion *runtime* (correr cada test en QEMU en fg y bg) debe hacerse
+> de forma interactiva; no hay runner headless en el repo.
 
 ### 6.2 Limpieza del repositorio
-- [ ] Eliminar todos los binarios del repo y verificar `.gitignore`.
-- [ ] Verificar que el historial de git sea coherente.
+- [x] No hay binarios trackeados; `.gitignore` cubre `*.o/*.bin/*.img/*.qcow2/*.vmdk/*.sys/*.pdf`.
+- [x] Historial de git coherente (commits incrementales por feature/fix en `master`).
 
 ### 6.3 README.md
-- [~] Existe `README.md` en la raiz; falta verificar que cubra todos los puntos
-  (comandos faltantes, operadores, atajos, limitaciones, citas/uso de IA).
+- [x] `README.md` actualizado: compilacion/ejecucion, todos los comandos y tests
+  con sus parametros, operadores (`&`, `|`), atajos (`Ctrl+C`, `Ctrl+D`, `+/-`),
+  ejemplos de uso, limitaciones conocidas y nota de uso de IA.
 
 ---
 

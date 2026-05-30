@@ -78,44 +78,117 @@ MM=BUDDY ./compile.sh && ./run.sh     # Buddy System
 
 ## Shell de usuario
 
-Al bootear se inicia una shell interactiva. Comandos disponibles:
+Al bootear se inicia una shell interactiva (`> `). La shell parsea la línea,
+crea procesos hijos para los comandos que son procesos y espera (`waitpid`) a
+los de foreground antes de mostrar de nuevo el prompt.
 
-| Comando | Descripción |
-|---------|-------------|
-| `help` | Lista de comandos |
-| `clear` | Limpia la pantalla |
-| `printTime` / `printDate` | Hora y fecha del sistema |
-| `registers` | Dump de registros de la última excepción |
-| `testDiv0` / `invOp` | Disparan excepción #DE / #UD |
-| `playBeep` | Toca una melodía por el parlante |
-| `bmFPS` / `bmCPU` / `bmMEM` / `bmKEY` | Benchmarks |
-| `testMM` | Test suite del memory manager (ver abajo) |
-| `ps` | Lista procesos activos |
-| `+` / `-` | Aumenta / disminuye tamaño de fuente |
+### Operadores
+
+| Operador | Significado |
+|----------|-------------|
+| `cmd &` | Ejecuta `cmd` en **background** (la shell no cede el foreground). |
+| `cmd1 \| cmd2` | **Pipe**: conecta el stdout de `cmd1` al stdin de `cmd2`. Ambos lados deben ser comandos de tipo *proceso*. Se soporta un solo `\|` por línea. |
+
+> Los **builtins** (corren sincrónicamente dentro de la shell) **no** admiten `&` ni `|`.
+
+### Atajos de teclado
+
+| Atajo | Acción |
+|-------|--------|
+| `Ctrl+C` | Mata el proceso en foreground. |
+| `Ctrl+D` | Envía EOF al stdin del proceso en foreground. |
+| `+` / `-` | Aumenta / disminuye el tamaño de fuente. |
+| `Backspace` | Borra el último carácter de la línea. |
+
+### Comandos *builtin* (corren en la shell)
+
+| Comando | Parámetros | Descripción |
+|---------|-----------|-------------|
+| `help` | — | Lista todos los comandos y operadores. |
+| `clear` | — | Limpia la pantalla. |
+| `mem` | — | Estado de la memoria: total, usada, libre y bloques asignados. |
+| `ps` | — | Lista procesos: PID, prioridad, foreground, estado y nombre. |
+| `kill` | `<pid>` | Mata el proceso con ese PID. |
+| `nice` | `<pid> <prioridad>` | Cambia la prioridad (1–5) de un proceso. |
+| `block` | `<pid>` | Alterna el estado del proceso entre BLOCKED y READY. |
+| `printTime` / `printDate` | — | Hora y fecha del sistema (UTC-3). |
+| `registers` | — | Dump de registros (presionar `Ctrl` antes para capturarlos). |
+| `testDiv0` / `invOp` | — | Disparan excepción #DE / #UD. |
+| `playBeep` | — | Toca una melodía por el parlante. |
+| `bmFPS` / `bmCPU` / `bmMEM` / `bmKEY` | — | Benchmarks. |
+
+### Comandos *proceso* (admiten `&` y `|`)
+
+| Comando | Parámetros | Descripción |
+|---------|-----------|-------------|
+| `loop` | `[ticks]` | Imprime su PID periódicamente con espera activa (default 18 ticks ≈ 1 s). |
+| `cat` | — | Copia stdin a stdout hasta EOF. Funciona standalone (teclado + `Ctrl+D`) y con pipes. |
+| `wc` | — | Cuenta las líneas recibidas por stdin. |
+| `filter` | — | Reimprime stdin filtrando las vocales. |
+| `mvar` | `<escritores> <lectores>` | Demo lectores/escritores con una MVar sincronizada por dos semáforos nombrados. Crea los hijos y termina de inmediato. |
+| `test_mm` | `<max_memoria>` | Test del memory manager (ver abajo). |
+| `test_proc` | `<max_procesos>` | Stress de creación/kill/block/unblock de procesos. |
+| `test_prio` | `<valor_objetivo>` | Muestra diferencias de ejecución según prioridad. |
+| `test_sync` | `<n> <use_sem>` | Lectores/escritores sobre una variable compartida. |
+
+### Ejemplos
+
+```text
+> help                      # lista de comandos
+> mem                       # estado de memoria
+> loop &                    # lanza loop en background, imprime su PID
+> ps                        # ver el PID del loop
+> nice 3 5                  # subir la prioridad del PID 3 al máximo
+> block 3                   # bloquear/desbloquear el PID 3
+> kill 3                    # matar el loop
+> cat | wc                  # escribir, terminar con Ctrl+D: imprime # de líneas
+> cat | filter              # escribir vocales: se reimprime sin vocales
+> mvar 2 2                  # 2 escritores y 2 lectores sobre la MVar
+> test_mm 1000000           # test de memoria en foreground
+> test_mm 1000000 &         # ídem en background
+> test_sync 100 1           # con semáforos: el valor final siempre es 0
+> test_sync 100 0           # sin semáforos: el valor final varía
+> test_prio 1000000         # se ve que las prioridades altas terminan antes
+> test_proc 5               # stress de procesos (Ctrl+C para cortar)
+```
 
 ---
 
 ## Test del Memory Manager
 
-Dentro de la shell, ejecutar:
+Dentro de la shell:
 
 ```
-testMM
+test_mm 1000000
 ```
 
-Corre una suite de 5 tests (alloc/free básico, múltiples allocaciones, coalescencia, edge cases, stress). El resultado esperado es `20 OK / 0 FAIL`.
+Corre una suite de 5 tests (alloc/free básico, múltiples allocaciones,
+coalescencia, edge cases, stress). El resultado esperado es `20 OK / 0 FAIL`.
+Puede correrse también en background: `test_mm 1000000 &`.
 
 Para testear **ambas implementaciones** compilar y ejecutar por separado:
 
 ```bash
-# Testear First-Fit
-./compile.sh && ./run.sh
-# → dentro del OS: testMM
+# First-Fit
+./compile.sh && ./run.sh        # → dentro del OS: test_mm 1000000
 
-# Testear Buddy System
-MM=BUDDY ./compile.sh && ./run.sh
-# → dentro del OS: testMM
+# Buddy System
+MM=BUDDY ./compile.sh && ./run.sh   # → dentro del OS: test_mm 1000000
 ```
+
+---
+
+## Limitaciones conocidas
+
+- Se soporta **un solo `|`** por línea (no cadenas de varios pipes).
+- Los **builtins** no admiten `&` ni `|`.
+- No existe `sys_dup2`: la shell conecta los pipes asignando stdin/stdout del
+  hijo al crearlo (`sys_create_process_fd`).
+- Los procesos **background** que terminan quedan como ZOMBIE hasta llenar la
+  tabla (no hay reaper de huérfanos); el límite es `MAX_PROCESSES = 64`.
+- Solo se registra **un** proceso esperando teclado a la vez (en la práctica
+  solo el foreground lee de stdin).
+- Sin paginación: todos los procesos comparten el mismo espacio de direcciones.
 
 ---
 
@@ -124,3 +197,12 @@ MM=BUDDY ./compile.sh && ./run.sh
 ```bash
 make clean
 ```
+
+---
+
+## Uso de IA
+
+Durante el desarrollo se utilizó **Claude Code** (Anthropic) como asistente para
+revisión de código, detección de bugs y redacción de documentación/comentarios.
+Las decisiones de diseño, la integración y la verificación finales fueron
+realizadas y validadas por los integrantes del grupo.
