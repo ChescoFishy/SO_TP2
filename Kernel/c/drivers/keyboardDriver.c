@@ -12,6 +12,18 @@ void kbd_set_waiting(struct PCB *p) {
     kbd_waiting_process = p;
 }
 
+/* Despierta al proceso que esperaba teclado. Solo lo marca READY si sigue
+** BLOCKED: si fue matado mientras esperaba, su slot quedo FREE/ZOMBIE (y el
+** puntero stale), y escribir ahi corromperia un slot ya liberado/reusado.
+** En cualquier caso consume el puntero. */
+static void kbd_wake_waiting(void) {
+    if (kbd_waiting_process != NULL) {
+        if (kbd_waiting_process->state == PROCESS_BLOCKED)
+            kbd_waiting_process->state = PROCESS_READY;
+        kbd_waiting_process = NULL;
+    }
+}
+
 char kbd_min[KBD_LENGTH] = {
     0,  27, '1','2','3','4','5','6','7','8','9','0','-','=', '\b', // backspace
     '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',     //tab y enter
@@ -129,10 +141,7 @@ void handlePressedKey(void){
             /* Ctrl+D → EOF; despierta al lector si estaba bloqueado. */
             if(c == 'd' || c == 'D'){
                 eof_pending = 1;
-                if(kbd_waiting_process != NULL){
-                    kbd_waiting_process->state = PROCESS_READY;
-                    kbd_waiting_process = NULL;
-                }
+                kbd_wake_waiting();
                 return;
             }
         }
@@ -140,10 +149,7 @@ void handlePressedKey(void){
         writeBuff(c);
 
         // Despertar al proceso que esperaba input
-        if (kbd_waiting_process != NULL) {
-            kbd_waiting_process->state = PROCESS_READY;
-            kbd_waiting_process = NULL;
-        }
+        kbd_wake_waiting();
     }
 }
 

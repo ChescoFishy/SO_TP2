@@ -257,10 +257,16 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
      robustez total habria que diferir el free al scheduler (tras el cambio de
      stack); no se hizo para no agregar complejidad por un riesgo solo teorico.
 
-5. **[BAJO] PENDIENTE — Un solo proceso esperando teclado.** `kbd_waiting_process`
-   es un unico puntero: si dos procesos bloquean en `sys_read` sobre teclado, el
-   segundo pisa al primero (posible lost wakeup). En la practica solo el foreground
-   lee teclado, por lo que se deja como limitacion conocida.
+5. **[BAJO] PARCIALMENTE ARREGLADO — Proceso esperando teclado.**
+   - ✅ **Use-after-free:** si se mataba a un proceso bloqueado leyendo teclado,
+     `kbd_waiting_process` quedaba apuntando a su PCB ya liberado y la siguiente
+     tecla escribia `PROCESS_READY` sobre ese slot (potencialmente reusado).
+     **Fix:** `kbd_wake_waiting` solo marca READY si el proceso sigue `BLOCKED`, y
+     siempre consume el puntero. (No disparable en el flujo normal de la shell,
+     pero era un use-after-free latente.)
+   - ⚠️ **Residual:** sigue habiendo un solo `kbd_waiting_process`; si dos procesos
+     bloquean en `sys_read` de teclado, el segundo pisa al primero (lost wakeup).
+     En la practica solo el foreground lee teclado: limitacion conocida.
 
 6. **✅ ARREGLADO — Comandos de usuario faltantes (Paso 5):** se agregaron `mem`,
    `loop`, `kill`, `nice`, `block` (builtins/proceso) y `filter`, `mvar` (procesos)
