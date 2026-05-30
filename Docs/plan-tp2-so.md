@@ -181,7 +181,7 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 - [x] `block <pid>` - alterna BLOCKED/READY (builtin, consulta estado via `ps`).
 
 ### 5.3 Comandos de IPC
-- [x] `cat` - copia stdin a stdout hasta EOF; funciona con pipes.
+- [x] `cat` - copia stdin a stdout hasta EOF; funciona standalone (teclado) y con pipes.
 - [x] `wc` - cuenta lineas de stdin.
 - [x] `filter` - reimprime stdin filtrando las vocales (proceso, pensado para pipes).
 - [x] `mvar <escritores> <lectores>` - lectores/escritores con MVar sincronizada por
@@ -258,6 +258,14 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 6. **✅ ARREGLADO — Comandos de usuario faltantes (Paso 5):** se agregaron `mem`,
    `loop`, `kill`, `nice`, `block` (builtins/proceso) y `filter`, `mvar` (procesos)
    en `userlib.c`, cableados en la tabla `commands[]`.
+
+7. **✅ ARREGLADO — `cat`/`wc`/`filter` no funcionaban standalone desde teclado.**
+   El `sys_read` de teclado devolvia 0 tanto al bloquearse (despertar sin datos)
+   como en EOF, y los comandos usaban `while(sys_read > 0)`, asi que salian en la
+   primera lectura vacia y no leian nada (solo andaban via pipe). **Fix:** el
+   kernel ahora devuelve `SYS_READ_RETRY` (-2) cuando bloquea por teclado y 0 solo
+   en EOF; userland usa un helper `read_full` que reintenta ante `READ_RETRY`. Asi
+   un mismo bucle sirve para teclado (reintento) y pipe (0 = EOF).
 
 ---
 

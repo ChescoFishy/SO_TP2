@@ -59,9 +59,16 @@ uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
     return count;
 }
 
-/* sys_read: usa el fd[0] del PCB. Si es pipe, bloquea via semaforo del pipe;
-** si es teclado (0), reproduce el comportamiento original (no bloqueante,
-** se bloquea el proceso si no hay datos y userland reintenta). */
+/* Valor de retorno de sys_read cuando el proceso se bloqueo esperando teclado:
+** userland debe reintentar (ver READ_RETRY en userlib.h). Distinto de 0 (EOF)
+** y de -1 (error de pipe). Permite que cat/wc/filter funcionen tanto con
+** teclado (reintento) como con pipes (0 = EOF) usando el mismo bucle. */
+#define SYS_READ_RETRY ((uint64_t)-2)
+
+/* sys_read: usa el fd[0] del PCB. Si es pipe, bloquea via semaforo del pipe y
+** devuelve datos (>0) o 0 en EOF. Si es teclado (0): devuelve datos si hay,
+** 0 en EOF (Ctrl+D), o SYS_READ_RETRY tras bloquear el proceso (sin datos).
+** El proceso se despierta cuando llega una tecla y reintenta desde userland. */
 uint64_t sys_read(char * buff, uint64_t count){
     PCB *cur = process_current();
     int phys_fd = (cur != NULL) ? cur->fd[0] : 0;
@@ -82,6 +89,8 @@ uint64_t sys_read(char * buff, uint64_t count){
             cur->state = PROCESS_BLOCKED;
             force_switch = 1;
         }
+        /* Sin datos: el proceso quedo bloqueado. Userland reintentara. */
+        return SYS_READ_RETRY;
     }
     return n;
 }

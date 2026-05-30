@@ -38,6 +38,11 @@
 #define MAX_PROCESSES 64
 #define MAX_NAME_LEN  32
 
+/* sys_read devuelve este valor cuando el proceso se bloqueo esperando teclado:
+** userland debe reintentar la lectura. Debe coincidir con SYS_READ_RETRY del
+** kernel (syscallDispatcher.c). Distinto de 0 (EOF) y de -1 (error). */
+#define READ_RETRY ((uint64_t)-2)
+
 // Vista userland de un proceso (misma que kernel ProcessInfo)
 typedef struct {
     uint64_t pid;

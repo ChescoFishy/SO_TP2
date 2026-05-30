@@ -62,11 +62,21 @@ const char *cmd_args(void){
     return g_cmd_args;
 }
 
+/* Lectura que abstrae el reintento del teclado: si el proceso se bloqueo
+** (READ_RETRY), reintenta tras despertar. Para pipes nunca devuelve READ_RETRY
+** (pipe_read bloquea internamente). Devuelve n>0 con datos, 0 en EOF. */
+static uint64_t read_full(char *buf, uint64_t n){
+    uint64_t r;
+    while((r = sys_read(buf, n)) == READ_RETRY)
+        ;
+    return r;
+}
+
 static void cat_main(int argc, char **argv){
     (void)argc; (void)argv;
     char buf[128];
     uint64_t n;
-    while((n = sys_read(buf, sizeof(buf))) > 0){
+    while((n = read_full(buf, sizeof(buf))) > 0){
         sys_write(STDOUT, buf, n);
     }
     sys_exit(0);
@@ -78,7 +88,7 @@ static void wc_main(int argc, char **argv){
     char buf[128];
     uint64_t n;
     uint64_t lines = 0;
-    while((n = sys_read(buf, sizeof(buf))) > 0){
+    while((n = read_full(buf, sizeof(buf))) > 0){
         for(uint64_t i = 0; i < n; i++){
             if(buf[i] == '\n') lines++;
         }
@@ -106,7 +116,7 @@ static void filter_main(int argc, char **argv){
     (void)argc; (void)argv;
     char buf[128], out[128];
     uint64_t n;
-    while((n = sys_read(buf, sizeof(buf))) > 0){
+    while((n = read_full(buf, sizeof(buf))) > 0){
         uint64_t j = 0;
         for(uint64_t i = 0; i < n; i++){
             if(!is_vowel(buf[i])) out[j++] = buf[i];
@@ -759,9 +769,11 @@ uint64_t putchar(char c){
 
 char getchar(){
     char c;
-    while(sys_read(&c, 1) == 0)
+    uint64_t r;
+    /* Reintentar mientras el teclado bloquee; devolver 0 en EOF (Ctrl+D). */
+    while((r = sys_read(&c, 1)) == READ_RETRY)
         ;
-    return c;
+    return (r >= 1) ? c : 0;
 }
 
 /* ── Parser de la shell ───────────────────────────────────────────────────── */
