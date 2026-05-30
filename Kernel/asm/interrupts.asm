@@ -247,6 +247,18 @@ _irq01Handler:
 	call    irqDispatcher
 	mov     al, 20h
 	out     20h, al
+
+	; Si handlePressedKey forzo un switch (p.ej. Ctrl+C mato al proceso
+	; actual), ceder la CPU igual que en el gate de syscall, para no volver
+	; con iretq al stack ya liberado del proceso muerto. force_switch solo
+	; queda en 1 aca cuando Ctrl+C mato al proceso corriente (kill-self).
+	cmp     qword [force_switch], 0
+	je      .kbd_no_yield
+	mov     qword [force_switch], 0
+	mov     rdi, rsp
+	call    scheduler_yield_impl   ; retorna RSP del proximo proceso
+	mov     rsp, rax
+.kbd_no_yield:
 	popState
 	iretq
 

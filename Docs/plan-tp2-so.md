@@ -234,14 +234,20 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
    y un lock global `sem_lock` que protege todas las operaciones de la tabla de
    semaforos (`semaphore.c`). El lock se libera siempre antes de ceder la CPU.
 
-4. **[BAJO, fragilidad] PENDIENTE — Uso de stack liberado en exit/kill-self.**
-   `process_exit` hace `mm_free(stack_base)` mientras el handler de syscall sigue
-   corriendo sobre ese stack; recien cambia de stack al volver de
-   `scheduler_yield_impl`. Funciona porque no hay preempcion ni otra asignacion en
-   el medio. **No se cambio a proposito:** diferir el free al reaping (waitpid)
-   generaria fuga de stack en procesos background que nunca se reapean. Si se
-   quiere robustez total, conviene un free diferido hecho por el scheduler tras
-   cambiar de stack.
+4. **[BAJO, fragilidad] PARCIALMENTE ARREGLADO — Uso de stack liberado.**
+   - ✅ **Caso grave (Ctrl+C):** el handler de teclado (`_irq01Handler`) no cedia
+     la CPU, asi que tras matar al proceso foreground corriente con Ctrl+C se hacia
+     `iretq` de vuelta a su stack ya liberado y el proceso muerto seguia corriendo
+     en userland (IF=1) hasta el proximo tick del timer. **Fix aplicado:** el
+     handler de teclado ahora chequea `force_switch` y llama a
+     `scheduler_yield_impl` (igual que el gate de syscall), cambiando de proceso
+     de inmediato.
+   - ⚠️ **Residual (teorico):** `process_exit`/`sys_exit` y el kill-self siguen
+     haciendo `mm_free(stack_base)` mientras el handler corre sobre ese stack;
+     recien cambia de stack al volver de `scheduler_yield_impl`. Funciona porque
+     corre con IF=0 (sin preempcion) y no hay otra asignacion en el medio. Para
+     robustez total habria que diferir el free al scheduler (tras el cambio de
+     stack); no se hizo para no agregar complejidad por un riesgo solo teorico.
 
 5. **[BAJO] PENDIENTE — Un solo proceso esperando teclado.** `kbd_waiting_process`
    es un unico puntero: si dos procesos bloquean en `sys_read` sobre teclado, el
