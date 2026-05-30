@@ -1,5 +1,11 @@
 # Plan de implementacion - TP2 Sistemas Operativos
 
+> **Estado al 2026-05-30 (sincronizado con el codigo):** Pasos 0-4 completos.
+> Paso 5 parcialmente hecho: shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y `waitpid`
+> funcionando, `cat`/`wc` y los tests como procesos OK, pero faltan los comandos
+> `mem`, `loop`, `kill`, `nice`, `block`, `filter` y `mvar`. Paso 6 pendiente.
+> Ver seccion "Bugs / pendientes conocidos" al final.
+
 ## Estado actual (heredado del TPE de Arquitectura)
 
 Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), driver de teclado, driver de sonido (PIT), timer, syscalls via `int 0x80`, shell basica y juego Tron. El sistema es **single-tasking** (un solo flujo de ejecucion, sin procesos ni memoria dinamica).
@@ -58,7 +64,7 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 **Dependencias:** Paso 1 (se necesita `malloc` para crear PCBs y stacks).
 
 ### 2.1 Definir el PCB (Process Control Block)
-- [ ] Crear la estructura PCB con al menos:
+- [x] Crear la estructura PCB con al menos (ver `Kernel/include/process.h`):
   - PID, nombre, prioridad, estado (READY, RUNNING, BLOCKED, ZOMBIE).
   - Stack pointer (RSP guardado), base pointer.
   - Foreground/background flag.
@@ -67,48 +73,40 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
   - Argv/argc (pasaje de parametros).
 
 ### 2.2 Implementar la tabla de procesos
-- [ ] Array o lista de PCBs con un limite maximo de procesos.
-- [ ] Funcion para crear proceso: asignar PID, reservar stack, preparar stack frame inicial (simular un contexto como si ya hubiera sido interrumpido).
-- [ ] Funcion para destruir/finalizar proceso: liberar recursos.
+- [x] Array de PCBs con limite maximo (`MAX_PROCESSES = 64`).
+- [x] Funcion para crear proceso: asignar PID, reservar stack, preparar stack frame inicial (`build_initial_stack` simula un frame post-interrupcion).
+- [x] Funcion para destruir/finalizar proceso: liberar recursos (`process_exit` / `process_kill`).
 
 ### 2.3 Implementar Context Switch
-- [ ] Escribir la rutina de context switch en ASM:
+- [x] Rutina de context switch en ASM (`interrupts.asm`):
   - Guardar todos los registros del proceso actual en su stack.
   - Cambiar RSP al stack del proximo proceso.
   - Restaurar registros del proximo proceso.
   - `iretq` para reanudar ejecucion.
-- [ ] Invocar el context switch desde el handler del timer (IRQ0) para lograr multitasking preemptivo.
+- [x] Invocar el context switch desde el handler del timer (IRQ0) -> `scheduler_tick`.
 
 ### 2.4 Implementar el Scheduler (Round Robin con prioridades)
-- [ ] Implementar Round Robin donde la prioridad determina cuantos quantums consecutivos recibe un proceso antes de ser desalojado.
-- [ ] Procesos con mayor prioridad reciben mas tiempo de CPU.
-- [ ] El scheduler ignora procesos en estado BLOCKED o ZOMBIE.
+- [x] Round Robin donde la prioridad determina cuantos quantums consecutivos recibe un proceso (`remaining_quanta = priority`).
+- [x] Procesos con mayor prioridad reciben mas tiempo de CPU.
+- [x] El scheduler ignora procesos en estado BLOCKED o ZOMBIE (`scheduler_next_ready` solo elige READY).
 
 ### 2.5 Crear el proceso idle
-- [ ] Proceso con la prioridad mas baja que ejecuta `hlt` en loop.
-- [ ] Se ejecuta cuando no hay ningun otro proceso READY.
+- [x] Proceso `idle` que ejecuta `hlt` en loop.
+- [~] **DEVIACION:** se crea con `DEFAULT_PRIORITY` (3), no con la prioridad mas baja, y compite en igualdad en el round-robin en vez de correr solo cuando no hay otro READY. Ver bug #2.
 
 ### 2.6 Adaptar el kernel al modelo multiproceso
-- [ ] El kernel ya no salta directamente a userland; en su lugar, crea el proceso `init` (o `shell`) como primer proceso y arranca el scheduler.
-- [ ] Adaptar el driver de teclado para que despierte procesos bloqueados esperando input (en vez de usar un polling simple).
+- [x] El kernel crea `idle` y `shell` como primeros procesos y arranca el scheduler (`initializeKernelBinary` + `scheduler_start`).
+- [x] El driver de teclado despierta al proceso bloqueado esperando input (`kbd_set_waiting` / wakeup en `handlePressedKey`).
 
 ### 2.7 Syscalls de procesos
-- [ ] Agregar las siguientes syscalls:
-  - `sys_create_process(name, function, argc, argv, fg)` -> PID.
-  - `sys_exit(retval)` -> finalizar proceso actual.
-  - `sys_getpid()` -> PID del proceso actual.
-  - `sys_ps(info_buffer)` -> listar procesos.
-  - `sys_kill(pid)` -> matar proceso.
-  - `sys_nice(pid, new_priority)` -> cambiar prioridad.
-  - `sys_block(pid)` -> bloquear proceso.
-  - `sys_unblock(pid)` -> desbloquear proceso.
-  - `sys_yield()` -> renunciar al CPU (forzar context switch).
-  - `sys_waitpid(pid)` -> esperar a que un hijo termine.
-- [ ] Wrappers correspondientes en `userlib.asm`.
+- [x] Syscalls implementadas (19-28 en `syscallDispatcher.c`):
+  - `sys_create_process`, `sys_exit`, `sys_getpid`, `sys_ps`, `sys_kill`,
+    `sys_nice`, `sys_block`, `sys_unblock`, `sys_yield`, `sys_waitpid`.
+- [x] Wrappers correspondientes en `userlib.asm`.
 
 ### 2.8 Tests
-- [ ] Integrar `test_proc` como programa de usuario y verificar que pase.
-- [ ] Integrar `test_prio` como programa de usuario y verificar que se visualicen diferencias de ejecucion.
+- [x] `test_proc` integrado como proceso de usuario.
+- [x] `test_prio` integrado como proceso de usuario.
 
 ---
 
@@ -117,25 +115,20 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 **Dependencias:** Paso 2 (necesita poder bloquear/desbloquear procesos).
 
 ### 3.1 Implementar semaforos con nombre
-- [ ] Estructura de semaforo: valor, cola de procesos bloqueados, nombre/identificador.
-- [ ] Tabla global de semaforos.
-- [ ] Usar una instruccion atomica (`xchg` o `lock cmpxchg`) para proteger el acceso al valor del semaforo y evitar race conditions.
-- [ ] `sem_wait`: si el valor es 0, bloquear el proceso (sin busy waiting); si es > 0, decrementar.
-- [ ] `sem_post`: incrementar valor; si hay procesos en la cola, desbloquear uno.
-- [ ] Mecanismo de apertura por nombre para que procesos no relacionados compartan semaforos.
+- [x] Estructura de semaforo: valor, cola de procesos bloqueados, nombre (`semaphore.c`).
+- [x] Tabla global de semaforos (`MAX_SEMS = 32`).
+- [~] **DEVIACION:** NO se usa una instruccion atomica (`xchg`/`lock cmpxchg`). La exclusion se apoya en que `int 0x80` usa interrupt gate (IF=0 durante la syscall) en uniprocesador. Correcto en la practica pero no cumple el requisito literal. Ver bug #3.
+- [x] `sem_wait` bloquea sin busy waiting cuando `value < 0`.
+- [x] `sem_post` incrementa y desbloquea un proceso en cola.
+- [x] Apertura por nombre (`sem_open`) para procesos no relacionados.
 
 ### 3.2 Syscalls de semaforos
-- [ ] Agregar syscalls:
-  - `sys_sem_open(name, initial_value)` -> crea o abre semaforo por nombre.
-  - `sys_sem_close(sem_id)` -> cierra semaforo.
-  - `sys_sem_wait(sem_id)` -> wait (P).
-  - `sys_sem_post(sem_id)` -> post (V).
-- [ ] Wrappers en `userlib.asm`.
+- [x] Syscalls implementadas (29-32):
+  - `sys_sem_open`, `sys_sem_close`, `sys_sem_wait`, `sys_sem_post`.
+- [x] Wrappers en `userlib.asm`.
 
 ### 3.3 Test
-- [ ] Integrar `test_sync` y verificar:
-  - Con semaforos: resultado final siempre 0.
-  - Sin semaforos: resultado varia entre ejecuciones.
+- [x] `test_sync` integrado como proceso de usuario (verificar 0 con sem / varia sin sem).
 
 ---
 
@@ -144,27 +137,25 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 **Dependencias:** Paso 2 y Paso 3 (necesita procesos y posiblemente semaforos para la sincronizacion interna del pipe).
 
 ### 4.1 Implementar pipes unidireccionales
-- [ ] Estructura del pipe: buffer circular, punteros de lectura/escritura, semaforos o mecanismo de bloqueo para sincronizar productor/consumidor.
-- [ ] Lectura bloqueante: si el pipe esta vacio, el proceso lector se bloquea hasta que haya datos.
-- [ ] Escritura bloqueante: si el pipe esta lleno, el proceso escritor se bloquea.
-- [ ] Soporte para EOF: cuando se cierra el extremo de escritura, los lectores reciben EOF.
+- [x] Buffer circular + 3 semaforos (data/space/mutex) para productor/consumidor (`pipe.c`).
+- [x] Lectura bloqueante cuando el pipe esta vacio.
+- [x] Escritura bloqueante cuando el pipe esta lleno.
+- [x] EOF al cerrar el extremo de escritura (y broken-pipe al cerrar lectura).
 
 ### 4.2 Abstraccion de file descriptors
-- [ ] Cada proceso tiene un array de file descriptors (al menos stdin=0, stdout=1).
-- [ ] Un FD puede apuntar a la terminal (teclado/pantalla) o a un extremo de un pipe.
-- [ ] `sys_read` y `sys_write` deben ser transparentes: el proceso no necesita saber si lee/escribe de un pipe o de la terminal.
-- [ ] Adaptar `sys_read` y `sys_write` existentes para que consulten el FD del proceso actual.
+- [x] Cada proceso tiene `fd[2]` (stdin=0, stdout=1) en el PCB.
+- [x] Un FD puede apuntar a la terminal o a un extremo de un pipe.
+- [x] `sys_read`/`sys_write` transparentes: consultan `cur->fd[]` y redirigen a pipe o consola.
 
 ### 4.3 Pipes con nombre
-- [ ] Permitir que procesos no relacionados compartan un pipe acordando un identificador.
+- [x] `pipe_open(name)` permite compartir un pipe por nombre acordado.
 
 ### 4.4 Syscalls de pipes
-- [ ] Agregar syscalls:
-  - `sys_pipe(fd_array)` -> crea un pipe, devuelve FDs de lectura y escritura.
-  - `sys_pipe_open(name)` -> abre pipe por nombre.
-  - `sys_dup2(old_fd, new_fd)` -> redirigir file descriptors (util para que la shell conecte pipes).
-  - `sys_close(fd)` -> cerrar un file descriptor.
-- [ ] Wrappers en `userlib.asm`.
+- [x] `sys_pipe(fd_array)` -> crea pipe, devuelve FDs (33).
+- [x] `sys_pipe_open(name)` -> abre pipe por nombre (36).
+- [x] `sys_pipe_close(fd)` -> cierra un FD de pipe (34).
+- [~] `sys_dup2` NO implementado. En su lugar la shell usa `sys_create_process_fd` (35) para asignar stdin/stdout del hijo al crearlo. Enfoque alternativo valido; si se exige `dup2` explicito, falta.
+- [x] Wrappers en `userlib.asm`.
 
 ---
 
@@ -173,63 +164,93 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 **Dependencias:** Pasos 1-4 completados.
 
 ### 5.1 Reescribir la shell (`sh`)
-- [ ] La shell actual es single-tasking. Reescribirla para que:
-  - Parsee el comando y cree un proceso hijo para ejecutarlo.
-  - Soporte `&` al final del comando para ejecutar en **background** (no ceder foreground).
-  - Soporte `|` para conectar 2 procesos via pipe (ej. `cat | filter`).
-  - Soporte `Ctrl+C` para matar el proceso en foreground.
-  - Soporte `Ctrl+D` para enviar EOF al proceso en foreground.
-  - En foreground: la shell espera (`waitpid`) a que el hijo termine antes de mostrar el prompt.
+- [x] Parsea el comando y crea un proceso hijo (`processLine` / `spawn_simple` / `spawn_pipe`).
+- [x] Soporte `&` al final -> background (no cede foreground).
+- [x] Soporte `|` para conectar 2 procesos via pipe.
+- [x] Soporte `Ctrl+C` -> mata el proceso foreground (`process_get_foreground` + `process_kill`).
+- [x] Soporte `Ctrl+D` -> EOF al stdin.
+- [x] En foreground la shell hace `waitpid` antes de reimprimir el prompt.
 
 ### 5.2 Comandos basicos
-- [ ] `help` - Lista todos los comandos disponibles, incluyendo los tests de la catedra.
-- [ ] `mem` - Imprime estado de la memoria (total, usada, libre) via `sys_mem_status`.
-- [ ] `ps` - Imprime lista de procesos con nombre, PID, prioridad, RSP, RBP, foreground.
-- [ ] `loop` - Imprime su PID con un saludo cada cierto tiempo. Espera activa (no bloquearse).
-- [ ] `kill <pid>` - Mata un proceso por su PID.
-- [ ] `nice <pid> <prioridad>` - Cambia la prioridad de un proceso.
-- [ ] `block <pid>` - Alterna el estado de un proceso entre BLOCKED y READY.
+- [x] `help` - lista todos los comandos y operadores.
+- [ ] `mem` - **FALTA.** La syscall `sys_mem_status` existe pero no hay comando que la use.
+- [x] `ps` - lista procesos (PID, prioridad, fg, estado, nombre). *Nota: no imprime RSP/RBP.*
+- [ ] `loop` - **FALTA.**
+- [ ] `kill <pid>` - **FALTA** como comando (existe `sys_kill` y `Ctrl+C`).
+- [ ] `nice <pid> <prioridad>` - **FALTA** como comando (existe `sys_nice`).
+- [ ] `block <pid>` - **FALTA** como comando (existe `sys_block`/`sys_unblock`).
 
 ### 5.3 Comandos de IPC
-- [ ] `cat` - Lee de stdin y lo imprime a stdout tal cual. Debe funcionar solo y con pipes.
-- [ ] `wc` - Cuenta lineas del input recibido por stdin.
-- [ ] `filter` - Lee de stdin y reimprime filtrando las vocales.
-- [ ] `mvar <escritores> <lectores>` - Problema de lectores/escritores con MVar sincronizada por semaforos. Crear los procesos hijos y terminar inmediatamente.
+- [x] `cat` - copia stdin a stdout hasta EOF; funciona solo y con pipes.
+- [x] `wc` - cuenta lineas de stdin.
+- [ ] `filter` - **FALTA** (filtrar vocales de stdin).
+- [ ] `mvar <escritores> <lectores>` - **FALTA** (lectores/escritores con MVar + semaforos).
 
 ### 5.4 Tests como programas de usuario
-- [ ] `test_mm <max_memory>` - debe ejecutarse como proceso, no como built-in.
-- [ ] `test_proc <max_processes>` - idem.
-- [ ] `test_prio <target_value>` - idem.
-- [ ] `test_sync <pairs> <increments> <use_sem>` - idem.
-- [ ] Todos deben poder correrse en foreground y en background.
+- [x] `test_mm <max_memory>` corre como proceso.
+- [x] `test_proc <max_processes>` corre como proceso.
+- [x] `test_prio <target_value>` corre como proceso.
+- [x] `test_sync <n> <use_sem>` corre como proceso.
+- [x] Todos pueden correrse en foreground y en background (`&`).
 
 ---
 
 ## Paso 6 - Verificacion y limpieza final
 
 ### 6.1 Verificacion obligatoria
-- [ ] Compilar con `-Wall` y que no haya warnings.
+- [ ] Compilar con `-Wall` y que no haya warnings. *(pendiente de verificar tras los ultimos cambios)*
 - [ ] Correr `test_mm` en foreground y background -> sin errores.
-- [ ] Correr `test_proc` en foreground y background -> sin errores.
+- [ ] Correr `test_proc` en foreground y background -> sin errores. *(riesgo por bug #1)*
 - [ ] Correr `test_sync` en foreground y background -> resultado 0 con semaforos.
 - [ ] Correr `test_prio` -> se visualizan diferencias de tiempo segun prioridad.
-- [ ] Verificar que el sistema este libre de deadlocks, race conditions y busy waiting (excepto donde se indica: `loop`, `test_sync` sin semaforos).
+- [ ] Verificar que el sistema este libre de deadlocks, race conditions y busy waiting.
 
 ### 6.2 Limpieza del repositorio
-- [ ] Eliminar todos los binarios (`.o`, `.bin`, `.img`, `.qcow2`, `.vmdk`) del repo.
-- [ ] Verificar que `.gitignore` cubra todos los artefactos de compilacion.
-- [ ] Verificar que el historial de git sea coherente desde el comienzo del TP.
+- [ ] Eliminar todos los binarios del repo y verificar `.gitignore`.
+- [ ] Verificar que el historial de git sea coherente.
 
 ### 6.3 README.md
-- [ ] Crear/actualizar `README.md` en la raiz con:
-  - Instrucciones de compilacion y ejecucion.
-  - Nombre y descripcion de cada comando y test, con sus parametros.
-  - Caracteres especiales (`&` para background, `|` para pipes).
-  - Atajos de teclado (`Ctrl+C`, `Ctrl+D`).
-  - Ejemplos de uso para cada requerimiento.
-  - Requerimientos faltantes o parcialmente implementados.
-  - Limitaciones.
-  - Citas de fragmentos de codigo / uso de IA.
+- [~] Existe `README.md` en la raiz; falta verificar que cubra todos los puntos
+  (comandos faltantes, operadores, atajos, limitaciones, citas/uso de IA).
+
+---
+
+## Bugs / pendientes conocidos (auditoria 2026-05-30)
+
+1. **[CRITICO] ✅ ARREGLADO — Fuga en la run-queue del scheduler.** `process_exit`
+   y la rama self de `process_kill` no removian al proceso de `run_queue` al pasar
+   a ZOMBIE, dejando punteros stale (y duplicados al reusarse el slot) y haciendo
+   crecer `queue_size` hasta `MAX_PROCESSES` (a partir de ahi `scheduler_add`
+   descartaba procesos nuevos y la shell colgaba en `waitpid`). **Fix aplicado:**
+   `scheduler_remove(p)` al pasar a ZOMBIE en ambos lugares (`process.c`).
+
+2. **[MEDIO] ✅ ARREGLADO — `idle` no corria como fallback.** Ahora `idle` se crea
+   con `MIN_PRIORITY` y se registra via `scheduler_set_idle`; `scheduler_next_ready`
+   lo reserva como ultima instancia y solo lo elige si no hay otro proceso READY
+   (`scheduler.c`, `kernel.c`).
+
+3. **[MEDIO/requisito] ✅ ARREGLADO — Semaforos sin instruccion atomica.** Se
+   agrego un spinlock test-and-set con `xchg` (`acquire`/`release` en `libasm.asm`)
+   y un lock global `sem_lock` que protege todas las operaciones de la tabla de
+   semaforos (`semaphore.c`). El lock se libera siempre antes de ceder la CPU.
+
+4. **[BAJO, fragilidad] PENDIENTE — Uso de stack liberado en exit/kill-self.**
+   `process_exit` hace `mm_free(stack_base)` mientras el handler de syscall sigue
+   corriendo sobre ese stack; recien cambia de stack al volver de
+   `scheduler_yield_impl`. Funciona porque no hay preempcion ni otra asignacion en
+   el medio. **No se cambio a proposito:** diferir el free al reaping (waitpid)
+   generaria fuga de stack en procesos background que nunca se reapean. Si se
+   quiere robustez total, conviene un free diferido hecho por el scheduler tras
+   cambiar de stack.
+
+5. **[BAJO] PENDIENTE — Un solo proceso esperando teclado.** `kbd_waiting_process`
+   es un unico puntero: si dos procesos bloquean en `sys_read` sobre teclado, el
+   segundo pisa al primero (posible lost wakeup). En la practica solo el foreground
+   lee teclado, por lo que se deja como limitacion conocida.
+
+6. **PENDIENTE — Comandos de usuario faltantes (Paso 5):** `mem`, `loop`, `kill`,
+   `nice`, `block`, `filter`, `mvar`. Las syscalls de soporte ya existen; falta
+   cablear los comandos en la tabla `commands[]` de `userlib.c`.
 
 ---
 

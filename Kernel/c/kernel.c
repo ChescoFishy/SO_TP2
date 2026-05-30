@@ -68,8 +68,16 @@ void * initializeKernelBinary(void){
     sem_init();
     pipe_init();
 
-    // Crear proceso idle primero (siempre en la posicion 0 de la cola)
-    process_create("idle", idle_entry, 0, NULL, 0);
+    // Crear proceso idle primero (siempre en la posicion 0 de la cola).
+    // Se le baja la prioridad al minimo y se registra como idle para que el
+    // scheduler lo elija solo cuando no hay ningun otro proceso READY.
+    int idle_pid = process_create("idle", idle_entry, 0, NULL, 0);
+    PCB *idle = process_get((uint64_t)idle_pid);
+    if(idle != NULL){
+        idle->priority = MIN_PRIORITY;
+        idle->remaining_quanta = MIN_PRIORITY;
+        scheduler_set_idle(idle);
+    }
 
     // Crear la shell como proceso foreground
     process_create("shell", (ProcessEntry)sampleCodeModuleAddress, 0, NULL, 1);

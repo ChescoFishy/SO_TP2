@@ -230,6 +230,11 @@ void process_exit(int retval){
 
     release_pcb_resources(current_process, retval);
 
+    /* Sacarlo de la run-queue: un ZOMBIE nunca vuelve a ejecutarse. Si no se
+    ** removiera, el puntero quedaria stale en run_queue (queue_size crece sin
+    ** bajar) y al reusarse el slot el PCB aparece duplicado en la cola. */
+    scheduler_remove(current_process);
+
     /* El slot queda como ZOMBIE hasta que el padre haga waitpid (recoge retval).
     ** El stack si lo liberamos ya: nadie mas lo va a usar. */
     current_process->state = PROCESS_ZOMBIE;
@@ -249,13 +254,15 @@ void process_kill(uint64_t pid){
     release_pcb_resources(p, -1);
 
     if(p == current_process){
-        /* Se quiere matar el mismo. */
+        /* Se quiere matar el mismo. Sacarlo de la run-queue (igual que en
+        ** process_exit) para no dejar un puntero stale ni duplicar el slot. */
+        scheduler_remove(current_process);
         current_process->state = PROCESS_ZOMBIE;
         mm_free(current_process->stack_base);
         current_process->stack_base = NULL;
         current_process->rsp = NULL;
         /* Fuerza el switch para seguir con otro proceso. */
-        force_switch = 1;       
+        force_switch = 1;
     }else{
         /* Matar otro proceso: liberar recursos inmediatamente y removerlo del scheduler. 
         ** No es necesario marcarlo como PROCESS_ZOMBIE porque el proceso actual no esta esperando por el.

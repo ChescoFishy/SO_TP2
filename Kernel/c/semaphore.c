@@ -3,6 +3,17 @@
 #include "scheduler.h"
 #include <stddef.h>
 
+/* Primitivas atomicas (xchg) definidas en libasm.asm. Protegen el acceso al
+** valor del semaforo contra race conditions, segun pide el enunciado. */
+extern void acquire(uint64_t *lock);
+extern void release(uint64_t *lock);
+
+/* Un unico lock global protege toda la tabla de semaforos. Todas las
+** operaciones de semaforo corren en contexto de syscall (int 0x80, interrupt
+** gate con IF=0) y ninguna ISR toca esta tabla, por lo que no hay riesgo de
+** deadlock por reentrancia desde una interrupcion. */
+static uint64_t sem_lock = 0;
+
 #define MAX_SEMS     32
 #define SEM_NAME_LEN 32
 
@@ -74,10 +85,13 @@ void sem_init(void) {
 int64_t sem_open(const char *name, uint64_t initial_value) {
     if (!name) return 0;
 
+    acquire(&sem_lock);
+
     /* ¿Ya existe? */
     Semaphore *s = find_sem(name);
     if (s) {
         s->open_count++;
+        release(&sem_lock);
         return 1;
     }
 
@@ -89,7 +103,10 @@ int64_t sem_open(const char *name, uint64_t initial_value) {
             break;
         }
     }
-    if (!s) return 0;
+    if (!s) {
+        release(&sem_lock);
+        return 0;
+    }
 
     sem_str_copy(s->name, name, SEM_NAME_LEN);
     s->value      = (int64_t)initial_value;
@@ -97,6 +114,7 @@ int64_t sem_open(const char *name, uint64_t initial_value) {
     s->wait_head  = 0;
     s->wait_tail  = 0;
     s->wait_count = 0;
+    release(&sem_lock);
     return 1;
 }
 
@@ -104,18 +122,29 @@ int64_t sem_open(const char *name, uint64_t initial_value) {
 int64_t sem_wait(const char *name) {
     if (!name) return -1;
 
+    acquire(&sem_lock);
+
     Semaphore *s = find_sem(name);
-    if (!s) return -1;
+    if (!s) {
+        release(&sem_lock);
+        return -1;
+    }
 
     s->value--;
 
     if (s->value < 0) {
         PCB *cur = process_current();
-        if (cur == NULL) return -1;
+        if (cur == NULL) {
+            release(&sem_lock);
+            return -1;
+        }
         queue_push(s, cur->pid);
         process_block(cur->pid); /* también setea force_switch si es el actual */
     }
 
+    /* El context switch real ocurre al volver al handler de syscall (tras
+    ** retornar de sem_wait), por lo que liberamos el lock antes de ceder CPU. */
+    release(&sem_lock);
     return 0;
 }
 
@@ -123,8 +152,13 @@ int64_t sem_wait(const char *name) {
 int64_t sem_post(const char *name) {
     if (!name) return -1;
 
+    acquire(&sem_lock);
+
     Semaphore *s = find_sem(name);
-    if (!s) return -1;
+    if (!s) {
+        release(&sem_lock);
+        return -1;
+    }
 
     s->value++;
 
@@ -133,6 +167,7 @@ int64_t sem_post(const char *name) {
         process_unblock(pid);
     }
 
+    release(&sem_lock);
     return 0;
 }
 
@@ -140,8 +175,13 @@ int64_t sem_post(const char *name) {
 int64_t sem_broadcast(const char *name) {
     if (!name) return -1;
 
+    acquire(&sem_lock);
+
     Semaphore *s = find_sem(name);
-    if (!s) return -1;
+    if (!s) {
+        release(&sem_lock);
+        return -1;
+    }
 
     while (s->wait_count > 0) {
         s->value++;
@@ -149,6 +189,7 @@ int64_t sem_broadcast(const char *name) {
         process_unblock(pid);
     }
 
+    release(&sem_lock);
     return 0;
 }
 
@@ -156,8 +197,13 @@ int64_t sem_broadcast(const char *name) {
 int64_t sem_close(const char *name) {
     if (!name) return -1;
 
+    acquire(&sem_lock);
+
     Semaphore *s = find_sem(name);
-    if (!s) return -1;
+    if (!s) {
+        release(&sem_lock);
+        return -1;
+    }
 
     s->open_count--;
     if (s->open_count <= 0) {
@@ -168,5 +214,6 @@ int64_t sem_close(const char *name) {
         s->wait_count = 0;
     }
 
+    release(&sem_lock);
     return 0;
 }

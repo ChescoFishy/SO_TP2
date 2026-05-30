@@ -11,10 +11,19 @@ static PCB* run_queue[MAX_PROCESSES];
 static int queue_size = 0;
 static int queue_idx  = 0;
 
+/* Proceso idle: se elige solo cuando ningun otro proceso esta READY. */
+static PCB* idle_proc = NULL;
+
 /* Inicializa la cola de ejecución. */
 void scheduler_init(void){
     queue_size = 0;         /* Tamaño de la cola. */
     queue_idx = 0;          /* Índice del proceso actual en la cola (round-robin). */
+    idle_proc = NULL;
+}
+
+/* Registra el proceso idle para que el scheduler lo trate como fallback. */
+void scheduler_set_idle(PCB* p){
+    idle_proc = p;
 }
 
 /* Arranque: lanza el primer proceso sin retornar. */
@@ -75,6 +84,8 @@ PCB* scheduler_next_ready(void){
         return NULL;
     }
 
+    PCB* idle_ready = NULL;   /* idle se reserva como ultima instancia */
+
     for(int i = 0; i < queue_size; i++){
         /* Avanzo de forma circular. */
         queue_idx = (queue_idx + 1) % queue_size;
@@ -82,13 +93,18 @@ PCB* scheduler_next_ready(void){
         PCB* c = run_queue[queue_idx];
 
         if(c->state == PROCESS_READY){
-            /* Retorna el primer proceso READY encontrado. */
+            if(c == idle_proc){
+                /* No elegir idle si hay otro READY: lo dejo como fallback. */
+                idle_ready = c;
+                continue;
+            }
+            /* Retorna el primer proceso READY (no-idle) encontrado. */
             return c;
         }
     }
 
-    /* No se encontró ningún proceso READY. */
-    return NULL;
+    /* Ningun proceso no-idle listo: correr idle si estaba READY, sino NULL. */
+    return idle_ready;
 }
 
 /* 

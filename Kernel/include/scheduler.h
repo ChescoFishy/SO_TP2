@@ -31,6 +31,9 @@ void scheduler_add(PCB* p);
 /* Elimina un proceso de la cola de ejecución. */
 void scheduler_remove(PCB* p);
 
+/* Registra el proceso idle: el scheduler lo elige solo si no hay otro READY. */
+void scheduler_set_idle(PCB* p);
+
 /* 
 ** Elegir el siguiente proceso READY usando round-robin. Solo elige procesos
 ** en estado READY (excluye explicitamente al RUNNING actual; debe ser marcado

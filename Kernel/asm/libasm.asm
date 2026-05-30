@@ -6,8 +6,26 @@ GLOBAL getMonth
 GLOBAL getYear
 GLOBAL inb
 GLOBAL outb
+GLOBAL acquire
+GLOBAL release
 
 section .text
+
+; void acquire(uint64_t *lock)
+; Spinlock test-and-set usando xchg (atomico/lockeado por hardware sobre memoria).
+; Protege la seccion critica de los semaforos contra race conditions.
+acquire:
+.spin:
+	mov rax, 1
+	xchg rax, [rdi]   ; intercambio atomico: rax = valor viejo, [rdi] = 1
+	test rax, rax
+	jnz .spin         ; si estaba tomado (viejo != 0), reintentar
+	ret
+
+; void release(uint64_t *lock)
+release:
+	mov qword [rdi], 0
+	ret
 	
 getSeconds:
 	mov al, 0
