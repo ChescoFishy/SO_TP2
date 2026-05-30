@@ -1,10 +1,10 @@
 # Plan de implementacion - TP2 Sistemas Operativos
 
-> **Estado al 2026-05-30 (sincronizado con el codigo):** Pasos 0-4 completos.
-> Paso 5 parcialmente hecho: shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y `waitpid`
-> funcionando, `cat`/`wc` y los tests como procesos OK, pero faltan los comandos
-> `mem`, `loop`, `kill`, `nice`, `block`, `filter` y `mvar`. Paso 6 pendiente.
-> Ver seccion "Bugs / pendientes conocidos" al final.
+> **Estado al 2026-05-30 (sincronizado con el codigo):** Pasos 0-5 completos.
+> Shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y `waitpid`; todos los comandos del
+> enunciado implementados (`help`, `mem`, `ps`, `loop`, `kill`, `nice`, `block`,
+> `cat`, `wc`, `filter`, `mvar`) y los tests como procesos. Paso 6 (verificacion
+> final + README) pendiente. Ver seccion "Bugs / pendientes conocidos" al final.
 
 ## Estado actual (heredado del TPE de Arquitectura)
 
@@ -173,18 +173,19 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
 
 ### 5.2 Comandos basicos
 - [x] `help` - lista todos los comandos y operadores.
-- [ ] `mem` - **FALTA.** La syscall `sys_mem_status` existe pero no hay comando que la use.
+- [x] `mem` - estado de la memoria (total/usada/libre/bloques) via `sys_mem_status`.
 - [x] `ps` - lista procesos (PID, prioridad, fg, estado, nombre). *Nota: no imprime RSP/RBP.*
-- [ ] `loop` - **FALTA.**
-- [ ] `kill <pid>` - **FALTA** como comando (existe `sys_kill` y `Ctrl+C`).
-- [ ] `nice <pid> <prioridad>` - **FALTA** como comando (existe `sys_nice`).
-- [ ] `block <pid>` - **FALTA** como comando (existe `sys_block`/`sys_unblock`).
+- [x] `loop [ticks]` - imprime su PID periodicamente con espera activa (proceso).
+- [x] `kill <pid>` - mata un proceso por PID (builtin).
+- [x] `nice <pid> <prioridad>` - cambia la prioridad (builtin).
+- [x] `block <pid>` - alterna BLOCKED/READY (builtin, consulta estado via `ps`).
 
 ### 5.3 Comandos de IPC
-- [x] `cat` - copia stdin a stdout hasta EOF; funciona solo y con pipes.
+- [x] `cat` - copia stdin a stdout hasta EOF; funciona con pipes.
 - [x] `wc` - cuenta lineas de stdin.
-- [ ] `filter` - **FALTA** (filtrar vocales de stdin).
-- [ ] `mvar <escritores> <lectores>` - **FALTA** (lectores/escritores con MVar + semaforos).
+- [x] `filter` - reimprime stdin filtrando las vocales (proceso, pensado para pipes).
+- [x] `mvar <escritores> <lectores>` - lectores/escritores con MVar sincronizada por
+  dos semaforos nombrados; crea los hijos y termina inmediatamente.
 
 ### 5.4 Tests como programas de usuario
 - [x] `test_mm <max_memory>` corre como proceso.
@@ -254,9 +255,9 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
    segundo pisa al primero (posible lost wakeup). En la practica solo el foreground
    lee teclado, por lo que se deja como limitacion conocida.
 
-6. **PENDIENTE — Comandos de usuario faltantes (Paso 5):** `mem`, `loop`, `kill`,
-   `nice`, `block`, `filter`, `mvar`. Las syscalls de soporte ya existen; falta
-   cablear los comandos en la tabla `commands[]` de `userlib.c`.
+6. **✅ ARREGLADO — Comandos de usuario faltantes (Paso 5):** se agregaron `mem`,
+   `loop`, `kill`, `nice`, `block` (builtins/proceso) y `filter`, `mvar` (procesos)
+   en `userlib.c`, cableados en la tabla `commands[]`.
 
 ---
 

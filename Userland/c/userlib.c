@@ -14,6 +14,13 @@ static int    strcmp(const char *a, const char *b);
 
 static void cat_main(int argc, char **argv);
 static void wc_main(int argc, char **argv);
+static void filter_main(int argc, char **argv);
+static void loop_main(int argc, char **argv);
+static void mvar_main(int argc, char **argv);
+static void mem_cmd(void);
+static void kill_cmd(void);
+static void nice_cmd(void);
+static void block_cmd(void);
 
 static Command commands[] = {
     /* Builtins: corren sincronicamente en la shell. No admiten & ni |. */
@@ -30,6 +37,10 @@ static Command commands[] = {
     {"bmMEM",     bmMEM,                0,             "benchmark de memoria"},
     {"bmKEY",     bmKEY,                0,             "mide latencia de tecla"},
     {"ps",        ps,                   0,             "lista los procesos activos"},
+    {"mem",       mem_cmd,              0,             "estado de la memoria"},
+    {"kill",      kill_cmd,             0,             "<pid>      mata un proceso"},
+    {"nice",      nice_cmd,             0,             "<pid> <p>  cambia prioridad (1-5)"},
+    {"block",     block_cmd,            0,             "<pid>      alterna BLOCKED/READY"},
     /* Procesos: la shell los lanza con sys_create_process. Admiten & y |. */
     {"test_mm",   0,        test_mm_main,    "<max>     test del memory manager"},
     {"test_proc", 0,        test_proc_main,  "<max>     test de procesos"},
@@ -37,6 +48,9 @@ static Command commands[] = {
     {"test_sync", 0,        test_sync_main,  "<n> <s>   test de sincronizacion"},
     {"cat",       0,        cat_main,        "copia stdin a stdout hasta EOF"},
     {"wc",        0,        wc_main,         "cuenta lineas en stdin"},
+    {"filter",    0,        filter_main,     "filtra las vocales de stdin"},
+    {"loop",      0,        loop_main,       "[ticks]   imprime su PID periodicamente"},
+    {"mvar",      0,        mvar_main,       "<w> <r>   demo MVar lectores/escritores"},
     {0, 0, 0, 0},
 };
 
@@ -74,6 +88,206 @@ static void wc_main(int argc, char **argv){
     out[len] = '\n';
     sys_write(STDOUT, out, len + 1);
     sys_exit(0);
+}
+
+static int is_vowel(char c){
+    switch(c){
+        case 'a': case 'e': case 'i': case 'o': case 'u':
+        case 'A': case 'E': case 'I': case 'O': case 'U':
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+/* filter: lee de stdin y reimprime todo salvo las vocales. Pensado para pipes
+** (ej. cat | filter) pero tambien funciona con datos de un pipe nombrado. */
+static void filter_main(int argc, char **argv){
+    (void)argc; (void)argv;
+    char buf[128], out[128];
+    uint64_t n;
+    while((n = sys_read(buf, sizeof(buf))) > 0){
+        uint64_t j = 0;
+        for(uint64_t i = 0; i < n; i++){
+            if(!is_vowel(buf[i])) out[j++] = buf[i];
+        }
+        if(j > 0) sys_write(STDOUT, out, j);
+    }
+    sys_exit(0);
+}
+
+/* loop: imprime su PID con un saludo cada cierto tiempo usando espera ACTIVA
+** (no se bloquea), como pide el enunciado. argv[0] opcional = periodo en ticks. */
+static void loop_main(int argc, char **argv){
+    uint64_t pid = sys_getpid();
+    uint64_t period = (argc >= 1 && argv != 0 && argv[0] != 0)
+                    ? (uint64_t)satoi(argv[0]) : 18;
+    if(period == 0) period = 18;
+
+    while(1){
+        printf("Hola! soy el proceso %d\n", (int)pid);
+        uint64_t start = sys_ticks();
+        while(sys_ticks() - start < period)
+            ;  /* espera activa: no cede CPU voluntariamente */
+    }
+}
+
+/* ── mvar: problema lectores/escritores con una MVar sincronizada ──────────────
+** Una MVar es una celda que esta llena o vacia. put() espera a que este vacia,
+** take() espera a que este llena. Se sincroniza con dos semaforos nombrados
+** (procesos no relacionados podrian compartirlos). Como todos los procesos de
+** usuario comparten el espacio de direcciones, la celda es una global. */
+
+#define MVAR_EMPTY     "mvar_empty"   /* tokens de slot vacio (init 1) */
+#define MVAR_FULL      "mvar_full"    /* tokens de slot lleno  (init 0) */
+#define MVAR_ITEMS     5              /* items que produce cada escritor */
+
+static int64_t mvar_cell;             /* la celda compartida */
+
+/* Arma un argv en heap (leak intencional: lo consume el proceso hijo, que vive
+** mas que mvar_main). Cada string entera ocupa 24 bytes de holgura. */
+static char **mvar_make_argv(int n, int a, int b){
+    uint64_t header = sizeof(char *) * (uint64_t)(n + 1);
+    char **v = (char **)sys_malloc(header + 24 * (uint64_t)n);
+    if(!v) return 0;
+    char *s0 = (char *)v + header;
+    num_to_str((uint64_t)a, s0, 10);
+    v[0] = s0;
+    if(n >= 2){
+        char *s1 = s0 + 24;
+        num_to_str((uint64_t)b, s1, 10);
+        v[1] = s1;
+    }
+    v[n] = 0;
+    return v;
+}
+
+static void mvar_writer(int argc, char **argv){
+    int items = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
+    int id    = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
+    for(int k = 0; k < items; k++){
+        sys_sem_wait(MVAR_EMPTY);     /* esperar slot vacio */
+        mvar_cell = id * 1000 + k;    /* poner valor */
+        sys_sem_post(MVAR_FULL);      /* avisar slot lleno */
+    }
+    sys_exit(0);
+}
+
+static void mvar_reader(int argc, char **argv){
+    int count = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
+    uint64_t pid = sys_getpid();
+    for(int k = 0; k < count; k++){
+        sys_sem_wait(MVAR_FULL);      /* esperar slot lleno */
+        int64_t v = mvar_cell;        /* tomar valor */
+        sys_sem_post(MVAR_EMPTY);     /* avisar slot vacio */
+        printf("[reader %d] leyo %d\n", (int)pid, (int)v);
+    }
+    sys_exit(0);
+}
+
+static void mvar_main(int argc, char **argv){
+    int W = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
+    int R = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
+    if(W <= 0 || R <= 0){
+        printf("uso: mvar <escritores> <lectores>\n");
+        sys_exit(-1);
+    }
+
+    /* total de items: se reparten entre los lectores para que ninguno quede
+    ** bloqueado esperando algo que nunca llega (sum lecturas == sum escrituras). */
+    int total = W * MVAR_ITEMS;
+    int base  = total / R;
+    int extra = total % R;
+
+    /* (re)inicializar los semaforos del MVar en valores conocidos. */
+    sys_sem_close(MVAR_EMPTY);
+    sys_sem_close(MVAR_FULL);
+    sys_sem_open(MVAR_EMPTY, 1);
+    sys_sem_open(MVAR_FULL, 0);
+
+    for(int i = 0; i < W; i++){
+        char **av = mvar_make_argv(2, MVAR_ITEMS, i);
+        sys_create_process("mvar_wr", (void *)mvar_writer, 2, av, 0);
+    }
+    for(int i = 0; i < R; i++){
+        int cnt = base + (i < extra ? 1 : 0);
+        char **av = mvar_make_argv(1, cnt, 0);
+        sys_create_process("mvar_rd", (void *)mvar_reader, 1, av, 0);
+    }
+
+    /* terminar inmediatamente, sin esperar a los hijos (como pide el enunciado). */
+    sys_exit(0);
+}
+
+/* Lee el siguiente entero positivo de *pp (saltea espacios). Devuelve -1 si no
+** hay token numerico. Avanza *pp mas alla de los digitos leidos. */
+static int64_t next_uint(const char **pp){
+    const char *p = *pp;
+    while(*p == ' ' || *p == '\t') p++;
+    if(*p < '0' || *p > '9'){ *pp = p; return -1; }
+    int64_t v = 0;
+    while(*p >= '0' && *p <= '9'){ v = v * 10 + (*p - '0'); p++; }
+    *pp = p;
+    return v;
+}
+
+/* mem: imprime el estado de la memoria via sys_mem_status. */
+static void mem_cmd(void){
+    MemStatus st;
+    sys_mem_status(&st);
+    char b[24];
+    shellPrintString("Estado de memoria (bytes):\n");
+    shellPrintString("  Total: "); num_to_str(st.total, b, 10); shellPrintString(b); shellNewline();
+    shellPrintString("  Usada: "); num_to_str(st.used,  b, 10); shellPrintString(b); shellNewline();
+    shellPrintString("  Libre: "); num_to_str(st.free,  b, 10); shellPrintString(b); shellNewline();
+    shellPrintString("  Bloques asignados: ");
+    num_to_str(st.alloc_count, b, 10); shellPrintString(b); shellNewline();
+}
+
+/* kill <pid>: mata el proceso indicado. */
+static void kill_cmd(void){
+    const char *a = cmd_args();
+    int64_t pid = (a != 0) ? next_uint(&a) : -1;
+    if(pid <= 0){
+        shellPrintString("uso: kill <pid>\n");
+        return;
+    }
+    sys_kill((uint64_t)pid);
+}
+
+/* nice <pid> <prioridad>: cambia la prioridad de un proceso. */
+static void nice_cmd(void){
+    const char *a = cmd_args();
+    int64_t pid  = (a != 0) ? next_uint(&a) : -1;
+    int64_t prio = (a != 0) ? next_uint(&a) : -1;
+    if(pid <= 0 || prio < 0){
+        shellPrintString("uso: nice <pid> <prioridad>\n");
+        return;
+    }
+    sys_nice((uint64_t)pid, (uint64_t)prio);
+}
+
+/* block <pid>: alterna el estado del proceso entre BLOCKED y READY. */
+#define STATE_BLOCKED 3   /* coincide con PROCESS_BLOCKED del kernel */
+static void block_cmd(void){
+    const char *a = cmd_args();
+    int64_t pid = (a != 0) ? next_uint(&a) : -1;
+    if(pid <= 0){
+        shellPrintString("uso: block <pid>\n");
+        return;
+    }
+    static ProcessInfo buf[MAX_PROCESSES];
+    uint64_t cnt = sys_ps(buf, MAX_PROCESSES);
+    for(uint64_t i = 0; i < cnt; i++){
+        if(buf[i].pid == (uint64_t)pid){
+            if(buf[i].state == STATE_BLOCKED)
+                sys_unblock((uint64_t)pid);
+            else
+                sys_block((uint64_t)pid);
+            return;
+        }
+    }
+    shellPrintString("block: PID no encontrado\n");
 }
 
 
