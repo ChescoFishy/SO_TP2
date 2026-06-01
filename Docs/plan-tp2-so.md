@@ -280,6 +280,23 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
    en EOF; userland usa un helper `read_full` que reintenta ante `READ_RETRY`. Asi
    un mismo bucle sirve para teclado (reintento) y pipe (0 = EOF).
 
+   *(Items 8-9 detectados por una code review externa, 2026-06-01.)*
+
+8. **✅ ARREGLADO — `sem_close` abandonaba procesos bloqueados.** Al liberar el
+   slot (open_count == 0) reseteaba `wait_count` sin desbloquear los PIDs en cola:
+   esos procesos quedaban en BLOCKED para siempre (ningun semaforo los despertaria).
+   **Fix:** antes de liberar, se desbloquean inline todos los waiters (no via
+   `sem_broadcast`, que reintentaria tomar `sem_lock` y deadlockearia el spinlock
+   no reentrante).
+
+9. **✅ ARREGLADO — `mm_status` (First-Fit) reportaba `total` no invariante.**
+   Sumaba solo los payloads, por lo que `total` *disminuia* al fragmentarse el
+   heap (cada split esconde otro header) y no coincidia con el heap real ni con la
+   convencion de Buddy. **Fix:** se guarda el tamano del heap en `mm_init` y
+   `mm_status` reporta `total = heap_total_size`; `used`/`free` cuentan el footprint
+   (header + payload) de cada bloque, asi `used + free == total` siempre. `test_mm`
+   no usa `mm_status`, asi que el cambio no afecta la suite.
+
 ---
 
 ## Orden de implementacion recomendado
