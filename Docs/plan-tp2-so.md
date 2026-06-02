@@ -280,22 +280,24 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
    en EOF; userland usa un helper `read_full` que reintenta ante `READ_RETRY`. Asi
    un mismo bucle sirve para teclado (reintento) y pipe (0 = EOF).
 
-   *(Items 8-9 detectados por una code review externa, 2026-06-01.)*
+8. **[CRITICO] ✅ ARREGLADO — Fuga de slots: los procesos no se reapeaban.**
+   En el flujo normal de foreground la shell hace `waitpid` *antes* de que el hijo
+   termine, asi que se bloquea; cuando el hijo sale, `wake_waiting_parent` le
+   entrega el retval y lo despierta, pero el padre retorna directo de `waitpid`
+   sin re-entrar a `process_waitpid`. El hijo quedaba `ZOMBIE` para siempre (la
+   rama de reaping de `process_waitpid` solo corre si el hijo ya estaba muerto al
+   llamar `waitpid`, lo que no pasa nunca en `spawn_simple`). **Cada comando de
+   foreground filtraba un slot de PCB**: tras ~62 comandos la tabla (64) se llenaba
+   y no se podian crear mas procesos. Los procesos background huerfanos (p.ej. los
+   hijos de `mvar`, cuyo padre sale enseguida) tambien filtraban. **Fix:**
+   `finalize_pcb` libera el slot directo si el padre ya consumio el retval
+   (`reaped`) o si el proceso quedo huerfano (padre muerto); solo deja `ZOMBIE`
+   cuando el padre sigue vivo y todavia no espero (carrera hijo-sale-antes-de-wait,
+   que luego reclama el `waitpid`). `process_kill` de otro proceso siempre libera.
 
-8. **✅ ARREGLADO — `sem_close` abandonaba procesos bloqueados.** Al liberar el
-   slot (open_count == 0) reseteaba `wait_count` sin desbloquear los PIDs en cola:
-   esos procesos quedaban en BLOCKED para siempre (ningun semaforo los despertaria).
-   **Fix:** antes de liberar, se desbloquean inline todos los waiters (no via
-   `sem_broadcast`, que reintentaria tomar `sem_lock` y deadlockearia el spinlock
-   no reentrante).
-
-9. **✅ ARREGLADO — `mm_status` (First-Fit) reportaba `total` no invariante.**
-   Sumaba solo los payloads, por lo que `total` *disminuia* al fragmentarse el
-   heap (cada split esconde otro header) y no coincidia con el heap real ni con la
-   convencion de Buddy. **Fix:** se guarda el tamano del heap en `mm_init` y
-   `mm_status` reporta `total = heap_total_size`; `used`/`free` cuentan el footprint
-   (header + payload) de cada bloque, asi `used + free == total` siempre. `test_mm`
-   no usa `mm_status`, asi que el cambio no afecta la suite.
+   *Doc:* el `test_mm` de la catedra es un bucle infinito que verifica integridad
+   (silencio = OK, `test_mm ERROR` = fallo); no imprime "20 OK / 0 FAIL". README
+   corregido.
 
 ---
 

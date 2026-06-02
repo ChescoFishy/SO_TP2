@@ -207,14 +207,6 @@ int64_t sem_close(const char *name) {
 
     s->open_count--;
     if (s->open_count <= 0) {
-        /* Despertar a los que quedaron bloqueados antes de liberar el slot: sin
-        ** esto quedarian en BLOCKED para siempre (ya no habria semaforo que los
-        ** despierte). Se desbloquea inline (no via sem_broadcast) porque ya
-        ** tenemos sem_lock tomado y el spinlock no es reentrante. */
-        while (s->wait_count > 0) {
-            uint64_t pid = queue_pop(s);
-            process_unblock(pid);
-        }
         s->open_count = 0;
         s->name[0]    = '\0';
         s->wait_head  = 0;

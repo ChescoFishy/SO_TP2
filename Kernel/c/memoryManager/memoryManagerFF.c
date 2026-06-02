@@ -15,14 +15,11 @@ typedef struct MemBlock {
 #define MIN_SPLIT (sizeof(MemBlock) + 8)
 
 static MemBlock* heap_start = NULL;
-/* Tamano total del heap administrado (constante tras mm_init). Se usa para
-** reportar `total` en mm_status sin que dependa de la fragmentacion. */
-static uint64_t heap_total_size = 0;
 
 void mm_init(void *start, uint64_t size){
 
     if(size <= sizeof(MemBlock)){
-        /* Si el espacio es demasiado pequeño para contener al menos un bloque, no se inicializa. */
+        /* Si el espacio es demasiado pequeño para contener al menos un bloque, no se inicializa. */ 
         return;
     }
 
@@ -31,7 +28,6 @@ void mm_init(void *start, uint64_t size){
     heap_start->size = size - sizeof(MemBlock);
     heap_start->is_free = 1;
     heap_start->next = NULL;
-    heap_total_size = size;
 }
 
 static void *malloc_impl(uint64_t size, int is_kernel){
@@ -109,10 +105,7 @@ void mm_status(MemStatus* status){
         return;
     }
 
-    /* total = tamano completo del heap (constante). used/free contabilizan el
-    ** footprint real de cada bloque (header + payload), de modo que
-    ** used + free == total siempre, sin depender de la fragmentacion. */
-    status->total = heap_total_size;
+    status->total = 0;
     status->used = 0;
     status->free = 0;
     status->alloc_count = 0;
@@ -120,12 +113,12 @@ void mm_status(MemStatus* status){
     MemBlock* block = heap_start;
 
     while(block != NULL){
-        uint64_t footprint = sizeof(MemBlock) + block->size;
+        status->total += block->size;
 
         if(block->is_free){
-            status->free += footprint;
+            status->free += block->size;
         }else{
-            status->used += footprint;
+            status->used += block->size;
             if(!block->is_kernel)
                 status->alloc_count++;
         }
