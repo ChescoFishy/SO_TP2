@@ -25,15 +25,18 @@ If `./run.sh` fails with "permission denied" on the image, the container wrote i
 
 ### Tests
 
-There is no host-side test runner. The kernel ships a built-in test suite invoked from inside the booted shell:
+There is no host-side test runner. The catedra test suite ships as **userland processes** launched from inside the booted shell (not built-ins), so they accept `&` (background) and `|` (pipe):
 
 ```
-testMM      # 5-test memory manager suite, expected: 20 OK / 0 FAIL
-ps          # list processes
-bmFPS / bmCPU / bmMEM / bmKEY  # benchmarks
+test_mm <max_memory>   # MM stress test: random alloc/free, checks no overlap
+test_proc <max_procs>  # creates/blocks/unblocks/kills dummy processes
+test_sync <n> <use_sem># N pairs inc/dec a shared var; expect 0 with semaphores
+test_prio <target>     # 3 processes race to a target with different priorities
+ps                     # list processes (built-in)
+bmFPS / bmCPU / bmMEM / bmKEY  # benchmarks (built-ins)
 ```
 
-To test both allocators, rebuild with each `MM` value and rerun `testMM`.
+To test both allocators, rebuild with each `MM` value and rerun `test_mm`.
 
 ## Architecture
 
@@ -54,8 +57,8 @@ The kernel heap lives at `0x600000` and is 8 MB (see `HEAP_START`/`HEAP_SIZE` in
 1. `loadModules` copies userland modules from end-of-kernel to their fixed load addresses.
 2. `clearBSS`, `load_idt`.
 3. `mm_init(HEAP_START, HEAP_SIZE)`.
-4. `process_init`, `scheduler_init`.
-5. Creates `idle` process (PID 0, just `hlt`s) and `shell` process (foreground, entry = `0x400000`).
+4. `process_init`, `scheduler_init`, `sem_init`, `pipe_init`.
+5. Creates `idle` process (just `hlt`s, lowest priority, registered as the scheduler's fallback via `scheduler_set_idle`) and the `shell` process (foreground, entry = `0x400000`).
 6. Returns; assembly then calls `main()` → `scheduler_start()` → `scheduler_start_asm` (loads first PCB's `rsp`, `popState`, `iretq` into userland).
 
 ### Memory manager
@@ -73,13 +76,22 @@ Both expose `mm_init / mm_malloc / mm_malloc_kernel / mm_free / mm_status`. The 
 - `scheduler.c` — round-robin with priority-derived quanta. `scheduler_tick` is called from the timer IRQ (irq00) in `interrupts.asm`; cooperative yield via `int 0x80` with `force_switch`. Both handlers in `interrupts.asm` save/restore full register state on the process's stack and pass `rsp` to/from C.
 - The scheduler is the kernel's main loop — `scheduler_start_asm` is the only path that ever leaves the kernel into userland.
 
+### Sync & IPC
+
+- `semaphore.c` — named semaphores (`MAX_SEMS = 32`), shared by agreeing on a name a priori. One global `sem_lock` (taken via `xchg` in `libasm.asm`) guards the table; `sem_wait`/`sem_post` block/wake processes via a per-sem PID wait-queue. No busy-waiting.
+- `pipe.c` — unidirectional blocking pipes (anonymous via `pipe_create`, or named via `pipe_open`). Each pipe is a circular buffer guarded by 3 semaphores (`data`/`space`/`mutex`) — classic producer/consumer. fds are encoded by base offset (`PIPE_FD_READ_BASE`/`PIPE_FD_WRITE_BASE`); `pipe_is_fd` distinguishes them from stdin/stdout (0/1). EOF when `writers == 0`, broken pipe when `readers == 0`.
+
 ### Syscalls
 
-`Kernel/include/syscallDispatcher.h` lists all 29 syscalls (`CANT_SYS = 29` in `defs.h`). Dispatched via `int 0x80` through `syscalls[]` table in `syscallDispatcher.c`. Userland calls them via `Userland/asm/userlib.asm` wrappers and `Userland/c/userlib.c` C wrappers. Adding a syscall requires: bumping `CANT_SYS`, writing the `sys_*` function, adding it to the dispatcher table, and exposing a wrapper in `userlib`.
+`Kernel/include/syscallDispatcher.h` lists all syscalls (`CANT_SYS = 37` in `defs.h`): 0–18 video/audio/memory, 19–28 processes, 29–32 semaphores, 33–36 pipes. Dispatched via `int 0x80` through the `syscalls[]` table in `syscallDispatcher.c` (the asm gate in `interrupts.asm` bounds-checks `rax` against the literal `37`). Userland calls them via `Userland/asm/userlib.asm` wrappers and `Userland/c/userlib.c` C wrappers. Adding a syscall requires: bumping `CANT_SYS` (and the literal in `_irq128Handler`), writing the `sys_*` function, adding it to the dispatcher table, and exposing a wrapper in `userlib`.
 
 ### Userland linkage
 
-Userland code is freestanding and links against only `userlib` — no libc. Each user "program" is built as a flat binary loaded at a fixed address, with `_loader.c` calling `main`. Currently only the shell exists as a real user binary; `testMM` and other shell commands run **in-process inside the shell** (same address space as the shell's userland module), not as separate processes — they call into shared userland helpers via direct function calls plus syscalls.
+Userland code is freestanding and links against only `userlib` — no libc. Userland ships as a single flat binary loaded at `0x400000`; `_loader.c` calls the shell's `main`. There is **one address space** for all userland — there is no per-process binary and no hardware privilege separation (everything, kernel and userland, runs in ring 0 with `CS = 0x08`; see `build_initial_stack` in `process.c`).
+
+Shell commands fall into two classes (see the `commands[]` table in `userlib.c`):
+- **Built-ins** (`help`, `clear`, `ps`, `mem`, `kill`, `nice`, `block`, benchmarks, …) run synchronously in the shell process; they do **not** accept `&` or `|`.
+- **Processes** (`test_mm`, `test_proc`, `test_sync`, `test_prio`, `cat`, `wc`, `filter`, `loop`, `mvar`) are spawned via `sys_create_process` as real PCB-backed processes, so they run in fg/bg and can be connected with a pipe. They share the shell's address space (no separate binary) but are independently scheduled.
 
 ## Conventions
 
