@@ -1,12 +1,16 @@
 # Plan de implementacion - TP2 Sistemas Operativos
 
-> **Estado al 2026-05-30 (sincronizado con el codigo):** Pasos 0-5 completos.
-> Shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y `waitpid`; todos los comandos del
-> enunciado implementados (`help`, `mem`, `ps`, `loop`, `kill`, `nice`, `block`,
-> `cat`, `wc`, `filter`, `mvar`) y los tests como procesos. Paso 6: codigo limpio
-> (`-Wall -Wextra` sin warnings, repo sin binarios) y README completo; resta solo
-> la verificacion *runtime* en QEMU (correr los tests en fg/bg a mano). Ver
-> seccion "Bugs / pendientes conocidos" al final.
+> **Estado al 2026-06-02 (sincronizado con el codigo):** Pasos 0-5 completos y
+> verificados contra el codigo fuente. Shell con `&`, `|`, `Ctrl+C`, `Ctrl+D` y
+> `waitpid`; todos los comandos del enunciado implementados (`help`, `mem`, `ps`,
+> `loop`, `kill`, `nice`, `block`, `cat`, `wc`, `filter`, `mvar`) y los tests como
+> procesos. Syscalls 0-36 (`CANT_SYS = 37`) cableadas en el dispatcher; idle con
+> `MIN_PRIORITY` + `scheduler_set_idle`; semaforos con spinlock `xchg`. Todos los
+> bugs de la auditoria (#1-#7) estan corregidos y commiteados en `master`. Paso 6:
+> codigo limpio (`-Wall -Wextra` sin warnings, repo sin binarios) y README
+> completo; resta **solo** la verificacion *runtime* en QEMU (correr los tests en
+> fg/bg a mano, seccion 6.1) — es interactiva porque la salida va al framebuffer
+> VBE y no hay runner headless. Ver seccion "Bugs / pendientes conocidos" al final.
 
 ## Estado actual (heredado del TPE de Arquitectura)
 
