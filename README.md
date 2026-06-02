@@ -162,9 +162,11 @@ Dentro de la shell:
 test_mm 1000000
 ```
 
-Corre una suite de 5 tests (alloc/free básico, múltiples allocaciones,
-coalescencia, edge cases, stress). El resultado esperado es `20 OK / 0 FAIL`.
-Puede correrse también en background: `test_mm 1000000 &`.
+Es el test de la cátedra: en un bucle infinito pide bloques de tamaño aleatorio
+hasta `max_memory`, los inicializa, **verifica su integridad** y los libera. Si
+detecta una corrupción imprime `test_mm ERROR` y termina; mientras no imprima
+nada, está pasando. Se corta con `Ctrl+C`. Puede correrse en background:
+`test_mm 1000000 &`.
 
 Para testear **ambas implementaciones** compilar y ejecutar por separado:
 

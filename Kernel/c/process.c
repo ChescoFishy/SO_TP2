@@ -207,41 +207,56 @@ static void close_process_pipes(PCB *p){
 }
 
 /* parent->rsp apunta al slot R15; el slot RAX esta 14 qwords mas arriba.
-** Sign-extender retval a 64 bits para que int64_t -1 se preserve en userland. */
-static void wake_waiting_parent(PCB *p){
+** Sign-extender retval a 64 bits para que int64_t -1 se preserve en userland.
+** Devuelve 1 si efectivamente desperto a un padre que esperaba (que ya consumio
+** el retval), 0 si no habia padre esperando. */
+static int wake_waiting_parent(PCB *p){
     PCB *parent = process_get(p->parent_pid);
     if(parent != NULL && parent->state == PROCESS_BLOCKED && parent->waiting_for == p->pid){
         parent->rsp[14] = (uint64_t)(int64_t)p->retval;
         parent->waiting_for = 0;
         parent->state = PROCESS_READY;
+        return 1;
     }
+    return 0;
 }
 
-/* Limpieza comun a exit y kill: pipes, fg_pid, retval, despertar padre. */
-static void release_pcb_resources(PCB *p, int retval){
+/* Limpieza comun a exit y kill: pipes, fg_pid, retval, despertar padre.
+** Devuelve 1 si un padre que esperaba ya consumio el retval. */
+static int release_pcb_resources(PCB *p, int retval){
     close_process_pipes(p);
     if(p->pid == fg_pid) fg_pid = 0;
     p->retval = retval;
-    wake_waiting_parent(p);
+    return wake_waiting_parent(p);
+}
+
+/* Finaliza el slot de un proceso que ya no va a ejecutarse. Si el padre ya
+** consumio el retval (estaba en waitpid) o el proceso quedo huerfano (padre
+** muerto), se libera el slot directamente: nadie hara (otro) waitpid. Si el
+** padre sigue vivo pero todavia no espero, se deja ZOMBIE para un waitpid
+** futuro (recien ahi se reclama el slot). Asi no se filtran slots con cada
+** comando de foreground. */
+static void finalize_pcb(PCB *p, int reaped){
+    scheduler_remove(p);
+    if(p->stack_base != NULL){
+        mm_free(p->stack_base);
+        p->stack_base = NULL;
+    }
+    p->rsp = NULL;
+
+    if(reaped || process_get(p->parent_pid) == NULL){
+        p->state = PROCESS_FREE;
+        p->pid = 0;
+    } else {
+        p->state = PROCESS_ZOMBIE;
+    }
 }
 
 void process_exit(int retval){
     if(current_process == NULL) return;
 
-    release_pcb_resources(current_process, retval);
-
-    /* Sacarlo de la run-queue: un ZOMBIE nunca vuelve a ejecutarse. Si no se
-    ** removiera, el puntero quedaria stale en run_queue (queue_size crece sin
-    ** bajar) y al reusarse el slot el PCB aparece duplicado en la cola. */
-    scheduler_remove(current_process);
-
-    /* El slot queda como ZOMBIE hasta que el padre haga waitpid (recoge retval).
-    ** El stack si lo liberamos ya: nadie mas lo va a usar. */
-    current_process->state = PROCESS_ZOMBIE;
-    mm_free(current_process->stack_base);
-    current_process->stack_base = NULL;
-    current_process->rsp = NULL;
-
+    int reaped = release_pcb_resources(current_process, retval);
+    finalize_pcb(current_process, reaped);
     force_switch = 1;
 }
 
@@ -251,30 +266,17 @@ void process_kill(uint64_t pid){
         return;
     }
 
-    release_pcb_resources(p, -1);
+    int reaped = release_pcb_resources(p, -1);
 
     if(p == current_process){
-        /* Se quiere matar el mismo. Sacarlo de la run-queue (igual que en
-        ** process_exit) para no dejar un puntero stale ni duplicar el slot. */
-        scheduler_remove(current_process);
-        current_process->state = PROCESS_ZOMBIE;
-        mm_free(current_process->stack_base);
-        current_process->stack_base = NULL;
-        current_process->rsp = NULL;
-        /* Fuerza el switch para seguir con otro proceso. */
+        /* Se quiere matar el mismo: finalizar y forzar el switch. */
+        finalize_pcb(current_process, reaped);
         force_switch = 1;
     }else{
-        /* Matar otro proceso: liberar recursos inmediatamente y removerlo del scheduler. 
-        ** No es necesario marcarlo como PROCESS_ZOMBIE porque el proceso actual no esta esperando por el.
-        ** Entonces no hay riesgo si hago scheduler_remove y libero el slot del proceso.
-        */ 
-        scheduler_remove(p);
-        if(p->stack_base != NULL){
-            mm_free(p->stack_base);
-            p->stack_base = NULL;
-        }
-        p->state = PROCESS_FREE;
-        p->pid = 0;
+        /* Matar otro proceso: liberar el slot de inmediato. Un proceso matado se
+        ** descarta (no se preserva su retval), asi que se fuerza FREE aunque el
+        ** padre no estuviera esperando: dejarlo ZOMBIE filtraria el slot. */
+        finalize_pcb(p, 1);
     }
 }
 

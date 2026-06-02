@@ -284,6 +284,25 @@ Ya se cuenta con: kernel 64-bit, IDT/IRQs, driver de video (framebuffer VBE), dr
    en EOF; userland usa un helper `read_full` que reintenta ante `READ_RETRY`. Asi
    un mismo bucle sirve para teclado (reintento) y pipe (0 = EOF).
 
+8. **[CRITICO] ✅ ARREGLADO — Fuga de slots: los procesos no se reapeaban.**
+   En el flujo normal de foreground la shell hace `waitpid` *antes* de que el hijo
+   termine, asi que se bloquea; cuando el hijo sale, `wake_waiting_parent` le
+   entrega el retval y lo despierta, pero el padre retorna directo de `waitpid`
+   sin re-entrar a `process_waitpid`. El hijo quedaba `ZOMBIE` para siempre (la
+   rama de reaping de `process_waitpid` solo corre si el hijo ya estaba muerto al
+   llamar `waitpid`, lo que no pasa nunca en `spawn_simple`). **Cada comando de
+   foreground filtraba un slot de PCB**: tras ~62 comandos la tabla (64) se llenaba
+   y no se podian crear mas procesos. Los procesos background huerfanos (p.ej. los
+   hijos de `mvar`, cuyo padre sale enseguida) tambien filtraban. **Fix:**
+   `finalize_pcb` libera el slot directo si el padre ya consumio el retval
+   (`reaped`) o si el proceso quedo huerfano (padre muerto); solo deja `ZOMBIE`
+   cuando el padre sigue vivo y todavia no espero (carrera hijo-sale-antes-de-wait,
+   que luego reclama el `waitpid`). `process_kill` de otro proceso siempre libera.
+
+   *Doc:* el `test_mm` de la catedra es un bucle infinito que verifica integridad
+   (silencio = OK, `test_mm ERROR` = fallo); no imprime "20 OK / 0 FAIL". README
+   corregido.
+
 ---
 
 ## Orden de implementacion recomendado
