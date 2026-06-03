@@ -1,7 +1,7 @@
-#include "include/test_sync.h"
-#include "include/syscall.h"
-#include "include/test_util.h"
-#include "include/userlib.h"
+#include "tests/test_sync.h"
+#include "syscall/syscall.h"
+#include "tests/test_util.h"
+#include "lib/userlib.h"
 
 #define SEM_ID              "sem"
 #define TOTAL_PAIR_PROCESSES 2

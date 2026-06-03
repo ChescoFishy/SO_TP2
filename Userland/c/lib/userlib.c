@@ -1,12 +1,12 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "../c/include/userlib.h"
-#include "../c/include/shell.h"
-#include "include/testMM.h"
-#include "include/test_proc.h"
-#include "include/test_prio.h"
-#include "include/test_sync.h"
-#include "include/test_util.h"
+#include "lib/userlib.h"
+#include "shell/shell.h"
+#include "tests/testMM.h"
+#include "tests/test_proc.h"
+#include "tests/test_prio.h"
+#include "tests/test_sync.h"
+#include "tests/test_util.h"
 
 /* Forward decls de helpers definidos mas abajo. */
 static size_t strlen(const char *s);

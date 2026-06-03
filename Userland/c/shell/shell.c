@@ -1,5 +1,5 @@
-#include "shell.h"
-#include "userlib.h"
+#include "shell/shell.h"
+#include "lib/userlib.h"
 
 static int cursorVisible = 0;
 static void showCursor(void){

@@ -1,7 +1,7 @@
 #ifndef TEST_PRIO_H
 #define TEST_PRIO_H
 
-#include "userlib.h"
+#include "lib/userlib.h"
 
 void test_prio_main(int argc, char **argv);
 

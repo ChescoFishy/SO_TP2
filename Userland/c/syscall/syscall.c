@@ -1,7 +1,7 @@
-#include "include/syscall.h"
-#include "include/userlib.h"
-#include "include/test_util.h"
-#include "include/test_sync.h"
+#include "syscall/syscall.h"
+#include "lib/userlib.h"
+#include "tests/test_util.h"
+#include "tests/test_sync.h"
 #include <stdint.h>
 
 /* zero_to_max se define en test_prio.c (no tiene header propio). */

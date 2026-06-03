@@ -5,7 +5,7 @@
 #define USERLIB_H
 
 #include <stdint.h>
-#include <memoryManager.h>
+#include <memoryManager/memoryManager.h>
 
 #define STDOUT 1
 #define STDERR 2

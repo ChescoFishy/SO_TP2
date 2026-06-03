@@ -2,7 +2,7 @@
 #define SYSCALL_H
 
 #include <stdint.h>
-#include "userlib.h"
+#include "lib/userlib.h"
 
 /* Compatibilidad con test files del repo que usan malloc/free/memset */
 #define malloc(n)   sys_malloc(n)

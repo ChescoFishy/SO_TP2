@@ -1,7 +1,7 @@
-#include "include/test_prio.h"
-#include "include/syscall.h"
-#include "include/test_util.h"
-#include "include/userlib.h"
+#include "tests/test_prio.h"
+#include "syscall/syscall.h"
+#include "tests/test_util.h"
+#include "lib/userlib.h"
 
 #define TOTAL_PROCESSES 3
 
