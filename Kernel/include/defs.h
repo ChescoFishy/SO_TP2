@@ -20,7 +20,7 @@
 #define CANT_SYS 37
 #define STDOUT 1
 #define STDERR 2
-#define TEXT_SIZE 1
+#define TEXT_SIZE 4
 #define FONT_WIDTH 8
 #define FONT_HEIGHT 16
 #define X_UPDATE FONT_WIDTH * TEXT_SIZE
@@ -40,6 +40,6 @@
 #define L_CONTROL 0x1D
 #define LETTERS 26
 #define BACKSPACE 0x0E
-#define MAX_FONT_SIZE 5
+#define MAX_FONT_SIZE 12
 
 #endif
