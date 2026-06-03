@@ -1,6 +1,6 @@
-#include "semaphore.h"
-#include "process.h"
-#include "scheduler.h"
+#include "ipc/semaphore.h"
+#include "process/process.h"
+#include "process/scheduler.h"
 #include <stddef.h>
 
 /* Primitivas atomicas (xchg) definidas en libasm.asm. Protegen el acceso al

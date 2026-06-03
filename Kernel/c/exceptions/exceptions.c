@@ -1,8 +1,8 @@
-#include "../include/exceptions.h"
-#include "../include/videoDriver.h"
-#include "../include/keyboardDriver.h"
-#include "../include/interrupts.h"
-#include "../include/naiveConsole.h"
+#include "exceptions/exceptions.h"
+#include "drivers/videoDriver.h"
+#include "drivers/keyboardDriver.h"
+#include "interrupts/interrupts.h"
+#include "console/naiveConsole.h"
 #include <stdint.h>
 
 Exception exceptionsArray[] = 

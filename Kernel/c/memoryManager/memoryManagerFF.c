@@ -1,7 +1,7 @@
 // FF por First Fit -> algorimto de asignación de memoria (ver en el .md)
 // Recorre la lista buscando el primer bloque libre con block->size >= size
 
-#include "../include/memoryManager.h"
+#include "memoryManager/memoryManager.h"
 #include <stddef.h>
 
 typedef struct MemBlock {

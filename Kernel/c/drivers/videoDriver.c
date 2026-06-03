@@ -1,6 +1,6 @@
-#include "../include/videoDriver.h"
-#include "../include/defs.h"
-#include "../include/font.h"
+#include "drivers/videoDriver.h"
+#include "lib/defs.h"
+#include "console/font.h"
 #include <stdint.h>
 #include <string.h>
 

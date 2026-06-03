@@ -1,8 +1,8 @@
-#include "process.h"
-#include "scheduler.h"
-#include "memoryManager.h"
-#include "lib.h"
-#include "pipe.h"
+#include "process/process.h"
+#include "process/scheduler.h"
+#include "memoryManager/memoryManager.h"
+#include "lib/lib.h"
+#include "ipc/pipe.h"
 #include <stddef.h>
 
 /* Tabla de procesos del Kernel. */

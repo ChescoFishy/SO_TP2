@@ -1,9 +1,9 @@
-#include "../include/videoDriver.h"
-#include "../include/keyboardDriver.h"
-#include "../include/naiveConsole.h"
-#include "../include/defs.h"
-#include "../include/lib.h"
-#include "../include/process.h"
+#include "drivers/videoDriver.h"
+#include "drivers/keyboardDriver.h"
+#include "console/naiveConsole.h"
+#include "lib/defs.h"
+#include "lib/lib.h"
+#include "process/process.h"
 #include <stdint.h>
 
 static PCB *kbd_waiting_process = NULL;

@@ -18,7 +18,7 @@ else
     MM_FLAG = -DMM_FF
 endif
 
-SOURCES=$(wildcard c/*.c c/drivers/*.c) $(MM_SRC)
+SOURCES=$(filter-out c/memoryManager/%.c, $(wildcard c/*/*.c)) $(MM_SRC)
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(KERNEL)
@@ -36,6 +36,6 @@ $(LOADEROBJECT):
 	$(ASM) $(ASMFLAGS) $(LOADERSRC) -o $(LOADEROBJECT)
 
 clean:
-	rm -rf asm/*.o c/*.o c/drivers/*.o c/memoryManager/*.o *.o *.bin
+	rm -rf asm/*.o c/*/*.o *.o *.bin
 
 .PHONY: all clean

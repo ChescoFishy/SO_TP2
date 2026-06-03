@@ -2,7 +2,7 @@
 #define SCHEDULER_H
 
 #include <stdint.h>
-#include "process.h"
+#include "process/process.h"
 
 /* 
 ** Definido en scheduler.c, seteado a 1 para solicitar un context switch VOLUNTARIO. 

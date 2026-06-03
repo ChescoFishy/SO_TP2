@@ -1,6 +1,6 @@
 #include <stdint.h>
-#include "keyboardDriver.h"
-#include "irqDispatcher.h"
+#include "drivers/keyboardDriver.h"
+#include "interrupts/irqDispatcher.h"
 
 // IRQ0 (timer) ya no pasa por aqui: scheduler_tick en interrupts.asm lo maneja.
 // IRQ1 (teclado) sigue aqui.

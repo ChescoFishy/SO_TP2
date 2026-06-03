@@ -1,5 +1,5 @@
-#include "time.h"
-#include "interrupts.h"
+#include "time/time.h"
+#include "interrupts/interrupts.h"
 
 unsigned char getSeconds(void);
 unsigned char getMinutes(void);

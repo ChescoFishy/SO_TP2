@@ -1,7 +1,7 @@
-#include "pipe.h"
-#include "semaphore.h"
-#include "process.h"
-#include "naiveConsole.h"
+#include "ipc/pipe.h"
+#include "ipc/semaphore.h"
+#include "process/process.h"
+#include "console/naiveConsole.h"
 #include <stddef.h>
 
 typedef struct {

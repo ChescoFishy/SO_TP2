@@ -1,6 +1,6 @@
-#include "scheduler.h"
-#include "process.h"
-#include "time.h"
+#include "process/scheduler.h"
+#include "process/process.h"
+#include "time/time.h"
 
 // Leida desde interrupts.asm para decidir si hacer context switch voluntario
 volatile uint64_t force_switch = 0;

@@ -4,7 +4,7 @@
 ** El bloque completo (header + payload) es potencia de 2.
 */
 
-#include "../include/memoryManager.h"
+#include "memoryManager/memoryManager.h"
 #include <stddef.h>
 
 #define MIN_ORDER 4     /* 2^4 = 16 bytes (8B header + 8B payload minimo) */ 

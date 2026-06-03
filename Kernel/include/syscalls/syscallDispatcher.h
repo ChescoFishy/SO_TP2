@@ -2,7 +2,7 @@
 #define SYSCALLDISPATCHER_H
 
 #include <stdint.h>
-#include "defs.h"
+#include "lib/defs.h"
 
 extern void * syscalls[CANT_SYS];
 

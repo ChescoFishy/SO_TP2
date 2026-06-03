@@ -1,14 +1,14 @@
 #include <stdint.h>
-#include "lib.h"
-#include "moduleLoader.h"
-#include "idtLoader.h"
-#include "kernelApi.h"
-#include "memoryManager.h"
-#include "process.h"
-#include "scheduler.h"
-#include "interrupts.h"
-#include "semaphore.h"
-#include "pipe.h"
+#include "lib/lib.h"
+#include "kernel/moduleLoader.h"
+#include "interrupts/idtLoader.h"
+#include "kernel/kernelApi.h"
+#include "memoryManager/memoryManager.h"
+#include "process/process.h"
+#include "process/scheduler.h"
+#include "interrupts/interrupts.h"
+#include "ipc/semaphore.h"
+#include "ipc/pipe.h"
 
 #define HEAP_START  0x600000
 #define HEAP_SIZE   (8 * 1024 * 1024)  // 8 MB

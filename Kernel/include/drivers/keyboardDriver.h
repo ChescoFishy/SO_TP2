@@ -1,7 +1,7 @@
 #ifndef KEYBOARDDRIVER_H
 #define KEYBOARDDRIVER_H
 
-#include <defs.h>
+#include <lib/defs.h>
 #include <stdint.h>
 
 void writeBuff(unsigned char c);
