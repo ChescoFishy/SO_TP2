@@ -21,3 +21,7 @@ gha-creds-*.json
 #ide
 .DS_Store
 .vscode
+.clangd
+.clangd/
+compile_commands.json
+.cache/
