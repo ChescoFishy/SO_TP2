@@ -1,0 +1,2 @@
+[] Implementar libreria STDINT para no tener que usar sys_write todo el tiempo.
+[] Reemplazar las llamadas a Sys_Write por printf
