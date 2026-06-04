@@ -2,25 +2,15 @@
 #include <stddef.h>
 #include "lib/userlib.h"
 #include "shell/shell.h"
+#include "commands/commands.h"
 #include "tests/testMM.h"
 #include "tests/test_proc.h"
 #include "tests/test_prio.h"
 #include "tests/test_sync.h"
-#include "tests/test_util.h"
 
 /* Forward decls de helpers definidos mas abajo. */
 static size_t strlen(const char *s);
 static int    strcmp(const char *a, const char *b);
-
-static void cat_main(int argc, char **argv);
-static void wc_main(int argc, char **argv);
-static void filter_main(int argc, char **argv);
-static void loop_main(int argc, char **argv);
-static void mvar_main(int argc, char **argv);
-static void mem_cmd(void);
-static void kill_cmd(void);
-static void nice_cmd(void);
-static void block_cmd(void);
 
 static Command commands[] = {
     /* Builtins: corren sincronicamente en la shell. No admiten & ni |. */
@@ -64,174 +54,19 @@ const char *cmd_args(void){
 
 /* Lectura que abstrae el reintento del teclado: si el proceso se bloqueo
 ** (READ_RETRY), reintenta tras despertar. Para pipes nunca devuelve READ_RETRY
-** (pipe_read bloquea internamente). Devuelve n>0 con datos, 0 en EOF. */
-static uint64_t read_full(char *buf, uint64_t n){
+** (pipe_read bloquea internamente). Devuelve n>0 con datos, 0 en EOF.
+** Compartido por los comandos cat/wc/filter (ver commands/commands.h). */
+uint64_t read_full(char *buf, uint64_t n){
     uint64_t r;
     while((r = sys_read(buf, n)) == READ_RETRY)
         ;
     return r;
 }
 
-static void cat_main(int argc, char **argv){
-    (void)argc; (void)argv;
-    char buf[128];
-    uint64_t n;
-    while((n = read_full(buf, sizeof(buf))) > 0){
-        sys_write(STDOUT, buf, n);
-    }
-    sys_exit(0);
-}
-
-/* wc: cuenta lineas en stdin hasta EOF y reporta el total. */
-static void wc_main(int argc, char **argv){
-    (void)argc; (void)argv;
-    char buf[128];
-    uint64_t n;
-    uint64_t lines = 0;
-    while((n = read_full(buf, sizeof(buf))) > 0){
-        for(uint64_t i = 0; i < n; i++){
-            if(buf[i] == '\n') lines++;
-        }
-    }
-    char out[24];
-    uint64_t len = num_to_str(lines, out, 10);
-    out[len] = '\n';
-    sys_write(STDOUT, out, len + 1);
-    sys_exit(0);
-}
-
-static int is_vowel(char c){
-    switch(c){
-        case 'a': case 'e': case 'i': case 'o': case 'u':
-        case 'A': case 'E': case 'I': case 'O': case 'U':
-            return 1;
-        default:
-            return 0;
-    }
-}
-
-/* filter: lee de stdin y reimprime todo salvo las vocales. Pensado para pipes
-** (ej. cat | filter) pero tambien funciona con datos de un pipe nombrado. */
-static void filter_main(int argc, char **argv){
-    (void)argc; (void)argv;
-    char buf[128], out[128];
-    uint64_t n;
-    while((n = read_full(buf, sizeof(buf))) > 0){
-        uint64_t j = 0;
-        for(uint64_t i = 0; i < n; i++){
-            if(!is_vowel(buf[i])) out[j++] = buf[i];
-        }
-        if(j > 0) sys_write(STDOUT, out, j);
-    }
-    sys_exit(0);
-}
-
-/* loop: imprime su PID con un saludo cada cierto tiempo usando espera ACTIVA
-** (no se bloquea), como pide el enunciado. argv[0] opcional = periodo en ticks. */
-static void loop_main(int argc, char **argv){
-    uint64_t pid = sys_getpid();
-    uint64_t period = (argc >= 1 && argv != 0 && argv[0] != 0)
-                    ? (uint64_t)satoi(argv[0]) : 18;
-    if(period == 0) period = 18;
-
-    while(1){
-        printf("Hola! soy el proceso %d\n", (int)pid);
-        uint64_t start = sys_ticks();
-        while(sys_ticks() - start < period)
-            ;  /* espera activa: no cede CPU voluntariamente */
-    }
-}
-
-/* ── mvar: problema lectores/escritores con una MVar sincronizada ──────────────
-** Una MVar es una celda que esta llena o vacia. put() espera a que este vacia,
-** take() espera a que este llena. Se sincroniza con dos semaforos nombrados
-** (procesos no relacionados podrian compartirlos). Como todos los procesos de
-** usuario comparten el espacio de direcciones, la celda es una global. */
-
-#define MVAR_EMPTY     "mvar_empty"   /* tokens de slot vacio (init 1) */
-#define MVAR_FULL      "mvar_full"    /* tokens de slot lleno  (init 0) */
-#define MVAR_ITEMS     5              /* items que produce cada escritor */
-
-static int64_t mvar_cell;             /* la celda compartida */
-
-/* Arma un argv en heap (leak intencional: lo consume el proceso hijo, que vive
-** mas que mvar_main). Cada string entera ocupa 24 bytes de holgura. */
-static char **mvar_make_argv(int n, int a, int b){
-    uint64_t header = sizeof(char *) * (uint64_t)(n + 1);
-    char **v = (char **)sys_malloc(header + 24 * (uint64_t)n);
-    if(!v) return 0;
-    char *s0 = (char *)v + header;
-    num_to_str((uint64_t)a, s0, 10);
-    v[0] = s0;
-    if(n >= 2){
-        char *s1 = s0 + 24;
-        num_to_str((uint64_t)b, s1, 10);
-        v[1] = s1;
-    }
-    v[n] = 0;
-    return v;
-}
-
-static void mvar_writer(int argc, char **argv){
-    int items = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    int id    = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
-    for(int k = 0; k < items; k++){
-        sys_sem_wait(MVAR_EMPTY);     /* esperar slot vacio */
-        mvar_cell = id * 1000 + k;    /* poner valor */
-        sys_sem_post(MVAR_FULL);      /* avisar slot lleno */
-    }
-    sys_exit(0);
-}
-
-static void mvar_reader(int argc, char **argv){
-    int count = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    uint64_t pid = sys_getpid();
-    for(int k = 0; k < count; k++){
-        sys_sem_wait(MVAR_FULL);      /* esperar slot lleno */
-        int64_t v = mvar_cell;        /* tomar valor */
-        sys_sem_post(MVAR_EMPTY);     /* avisar slot vacio */
-        printf("[reader %d] leyo %d\n", (int)pid, (int)v);
-    }
-    sys_exit(0);
-}
-
-static void mvar_main(int argc, char **argv){
-    int W = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    int R = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
-    if(W <= 0 || R <= 0){
-        printf("uso: mvar <escritores> <lectores>\n");
-        sys_exit(-1);
-    }
-
-    /* total de items: se reparten entre los lectores para que ninguno quede
-    ** bloqueado esperando algo que nunca llega (sum lecturas == sum escrituras). */
-    int total = W * MVAR_ITEMS;
-    int base  = total / R;
-    int extra = total % R;
-
-    /* (re)inicializar los semaforos del MVar en valores conocidos. */
-    sys_sem_close(MVAR_EMPTY);
-    sys_sem_close(MVAR_FULL);
-    sys_sem_open(MVAR_EMPTY, 1);
-    sys_sem_open(MVAR_FULL, 0);
-
-    for(int i = 0; i < W; i++){
-        char **av = mvar_make_argv(2, MVAR_ITEMS, i);
-        sys_create_process("mvar_wr", (void *)mvar_writer, 2, av, 0);
-    }
-    for(int i = 0; i < R; i++){
-        int cnt = base + (i < extra ? 1 : 0);
-        char **av = mvar_make_argv(1, cnt, 0);
-        sys_create_process("mvar_rd", (void *)mvar_reader, 1, av, 0);
-    }
-
-    /* terminar inmediatamente, sin esperar a los hijos (como pide el enunciado). */
-    sys_exit(0);
-}
-
 /* Lee el siguiente entero positivo de *pp (saltea espacios). Devuelve -1 si no
-** hay token numerico. Avanza *pp mas alla de los digitos leidos. */
-static int64_t next_uint(const char **pp){
+** hay token numerico. Avanza *pp mas alla de los digitos leidos.
+** Compartido por los comandos kill/nice/block (ver commands/commands.h). */
+int64_t next_uint(const char **pp){
     const char *p = *pp;
     while(*p == ' ' || *p == '\t') p++;
     if(*p < '0' || *p > '9'){ *pp = p; return -1; }
@@ -239,65 +74,6 @@ static int64_t next_uint(const char **pp){
     while(*p >= '0' && *p <= '9'){ v = v * 10 + (*p - '0'); p++; }
     *pp = p;
     return v;
-}
-
-/* mem: imprime el estado de la memoria via sys_mem_status. */
-static void mem_cmd(void){
-    MemStatus st;
-    sys_mem_status(&st);
-    char b[24];
-    shellPrintString("Estado de memoria (bytes):\n");
-    shellPrintString("  Total: "); num_to_str(st.total, b, 10); shellPrintString(b); shellNewline();
-    shellPrintString("  Usada: "); num_to_str(st.used,  b, 10); shellPrintString(b); shellNewline();
-    shellPrintString("  Libre: "); num_to_str(st.free,  b, 10); shellPrintString(b); shellNewline();
-    shellPrintString("  Bloques asignados: ");
-    num_to_str(st.alloc_count, b, 10); shellPrintString(b); shellNewline();
-}
-
-/* kill <pid>: mata el proceso indicado. */
-static void kill_cmd(void){
-    const char *a = cmd_args();
-    int64_t pid = (a != 0) ? next_uint(&a) : -1;
-    if(pid <= 0){
-        shellPrintString("uso: kill <pid>\n");
-        return;
-    }
-    sys_kill((uint64_t)pid);
-}
-
-/* nice <pid> <prioridad>: cambia la prioridad de un proceso. */
-static void nice_cmd(void){
-    const char *a = cmd_args();
-    int64_t pid  = (a != 0) ? next_uint(&a) : -1;
-    int64_t prio = (a != 0) ? next_uint(&a) : -1;
-    if(pid <= 0 || prio < 0){
-        shellPrintString("uso: nice <pid> <prioridad>\n");
-        return;
-    }
-    sys_nice((uint64_t)pid, (uint64_t)prio);
-}
-
-/* block <pid>: alterna el estado del proceso entre BLOCKED y READY. */
-#define STATE_BLOCKED 3   /* coincide con PROCESS_BLOCKED del kernel */
-static void block_cmd(void){
-    const char *a = cmd_args();
-    int64_t pid = (a != 0) ? next_uint(&a) : -1;
-    if(pid <= 0){
-        shellPrintString("uso: block <pid>\n");
-        return;
-    }
-    static ProcessInfo buf[MAX_PROCESSES];
-    uint64_t cnt = sys_ps(buf, MAX_PROCESSES);
-    for(uint64_t i = 0; i < cnt; i++){
-        if(buf[i].pid == (uint64_t)pid){
-            if(buf[i].state == STATE_BLOCKED)
-                sys_unblock((uint64_t)pid);
-            else
-                sys_block((uint64_t)pid);
-            return;
-        }
-    }
-    shellPrintString("block: PID no encontrado\n");
 }
 
 
@@ -353,219 +129,15 @@ uint64_t num_to_str(uint64_t value, char * dest, int base){
     return (uint64_t)pos;
 }
 
-// Benchmark de CPU (operaciones int/float)
-void bmCPU(){
-    /*
-     * bmCPU - simple CPU benchmark
-     * - Runs a mix of integer and floating-point operations N times
-     * - Measures elapsed ticks using sys_ticks() and prints total time
-     *   and a rough operations-per-tick metric.
-     *
-     * Notes:
-     * - N is kept reasonably large to get measurable tick counts.
-     * - This is a coarse benchmark (no warming, no cycle-accurate timing).
-     */
-    const uint32_t N = 1000000u;
-    uint64_t ticks = sys_ticks();
-
-    uint64_t result = 0;
-    double float_result = 0.0;
-
-    for(uint32_t i = 0; i < N; ++i){
-        result += (uint64_t)i * 7ull;
-        result = result % 2147483647ull;
-
-        float_result += (double)i * 3.14159;
-        if ((i % 100000u) == 0 && i != 0) {
-            float_result *= 0.5;
-        }
-    }
-
-    uint64_t end_ticks = sys_ticks();
-    uint64_t delta = end_ticks - ticks;
-
-    shellPrintString("Tiempo: ");
-
-    char timeBuff[32];
-    num_to_str(delta, timeBuff, 10);
-    shellPrintString(timeBuff);
-    shellPrintString(" ticks\n");
-
-    if(delta > 0){
-        /* promote N to 64-bit before division to avoid surprises */
-        uint64_t ops_per_tick = ((uint64_t)N) / delta;
-        shellPrintString("Operaciones por tick: ");
-        num_to_str(ops_per_tick, timeBuff, 10);
-        shellPrintString(timeBuff);
-        shellPrintString("\n");
-    } else {
-        shellPrintString("Elapsed ticks = 0, no se puede calcular ops/tick.\n");
-    }
-
-    return;
-}
-
-// Benchmark de FPS aproximado (limpia pantalla en loop)
-void bmFPS(){    
-    /*
-     * bmFPS - crude frame-rate benchmark
-     * - Repeatedly clears the screen for ~3 seconds and counts iterations.
-     * - Assumes sys_ticks() increments roughly 18 times per second (BIOS-like).
-     * - Avoid printing inside the loop to not skew the results.
-     */
-    uint64_t ticks = sys_ticks();
-    uint64_t count = 0;
-    /* 18 ticks ~= 1 second on many systems that emulate BIOS ticks */
-    uint64_t duration = 18 * 7; /* ~3 seconds */
-
-    shellPrintString("Inicio de test.\n");
-    /* busy loop that only clears the screen and increments counter */
-    while((sys_ticks() - ticks) < duration){
-        sys_clear();
-        count++;
-    }
-
-    /* count iterations over ~7 seconds -> approximate frames per second */
-    uint64_t fps = count / 7;
-    shellPrintString("FPS: ");
-
-    char fpsBuff[BM_BUFF];
-    num_to_str(fps, fpsBuff, 10);
-    shellPrintString(fpsBuff);
-    shellPrintString("\n");
-}
-
-// Benchmark simple de memoria (llenado/copia/checksum)
-void bmMEM(){
-    /*
-     * bmMEM - simple memory benchmark
-     * - Fills a 4KB buffer many times, computes a checksum and does copies.
-     * - Measures elapsed ticks and reports operations per tick.
-     *
-     * Notes:
-     * - Make sure the operations count is calculated using 64-bit to avoid
-     *   intermediate overflow on 32-bit platforms.
-     */
-    char buffer[4 * KB];
-    uint64_t totalChecksum = 0;
-    uint64_t ticks = sys_ticks();
-
-    for(int iteration = 0; iteration < 10000; iteration++){
-        for(int i = 0; i < 4 * KB; i++){
-            buffer[i] = (i + iteration) % 256;
-        }
-
-        /* use 64-bit checksum to avoid truncation issues */
-        uint64_t checksum = 0;
-        for(int i = 0; i < 4 * KB; i++){
-            checksum += (unsigned char)buffer[i];
-            checksum = checksum % 1000000ULL;
-        }
-
-        for(int i = 0; i < 2 * KB; i++){
-            buffer[i + 2 * KB] = buffer[i];
-        }
-
-        /* make checksum observable to prevent over-optimization */
-        totalChecksum += checksum;
-    }
-
-    uint64_t finalTicks = sys_ticks();
-    uint64_t delta = finalTicks - ticks;
-
-    shellPrintString("Tiempo: ");
-
-    char buff[BM_BUFF];
-    num_to_str(delta, buff, 10);
-    shellPrintString(buff);
-    shellPrintString(" ticks\n");
-
-    if(delta > 0){
-        /* compute operations using 64-bit arithmetic to be safe */
-        uint64_t operations = (uint64_t)10000 * (uint64_t)(4 * KB) * 3ULL;
-        uint64_t operationsPerCycle = operations / delta;
-        shellPrintString("Operaciones por tick: ");
-        num_to_str(operationsPerCycle, buff, 10);
-        shellPrintString(buff);
-        shellPrintString("\n");
-    }
-
-    /* Print a checksum summary to ensure computations aren't optimized away */
-    shellPrintString("Checksum: ");
-    num_to_str(totalChecksum, buff, 10);
-    shellPrintString(buff);
-    shellPrintString("\n");
-}
-
-// Mide tiempo hasta presionar una tecla
-void bmKEY(){
-    shellPrintString("Presione cualquier tecla: \n");
-    uint64_t ticks = sys_ticks();
-    getchar();
-
-    uint64_t finalTicks = sys_ticks();
-    uint64_t delta = finalTicks - ticks;
-    shellPrintString("Tiempo: ");
-    char buff[BM_BUFF];
-
-    num_to_str(delta, buff, 10);
-    shellPrintString(buff);
-    shellPrintString(" ticks\n");
-}
-
-// Reproduce una secuencia corta de beeps
-void playBeep(){
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_DS5, EIGHTH);
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_DS5, EIGHTH);
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_B4, EIGHTH);
-    sys_beep(NOTE_D5, EIGHTH);
-    sys_beep(NOTE_C5, EIGHTH);
-    sys_beep(NOTE_A4, QUARTER);
-
-    sys_beep(NOTE_C4, EIGHTH);
-    sys_beep(NOTE_E4, EIGHTH);
-    sys_beep(NOTE_A4, EIGHTH);
-    sys_beep(NOTE_B4, QUARTER);
-
-    sys_beep(NOTE_E4, EIGHTH);
-    sys_beep(NOTE_GS4, EIGHTH);
-    sys_beep(NOTE_B4, EIGHTH);
-    sys_beep(NOTE_C5, QUARTER);
-
-    sys_beep(NOTE_E4, EIGHTH);
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_DS5, EIGHTH);
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_DS5, EIGHTH);
-    sys_beep(NOTE_E5, EIGHTH);
-    sys_beep(NOTE_B4, EIGHTH);
-    sys_beep(NOTE_D5, EIGHTH);
-    sys_beep(NOTE_C5, EIGHTH);
-    sys_beep(NOTE_A4, QUARTER);
-
-    sys_beep(NOTE_C4, EIGHTH);
-    sys_beep(NOTE_E4, EIGHTH);
-    sys_beep(NOTE_A4, EIGHTH);
-    sys_beep(NOTE_B4, QUARTER);
-
-    sys_beep(NOTE_E4, EIGHTH);
-    sys_beep(NOTE_C5, EIGHTH);
-    sys_beep(NOTE_B4, EIGHTH);
-    sys_beep(NOTE_A4, QUARTER);
-}
-
 // Redibuja la pantalla luego de cambiar el tamaño de fuente
 void redrawFont(){
-    sys_clear(); 
+    sys_clear();
 
     if(redrawLength == 0){
         return;
-    } 
+    }
 
-    char buffer[REDRAW_BUFF]; 
+    char buffer[REDRAW_BUFF];
 
     uint64_t current = redrawBuffer[0].fd;
     uint32_t idx = 0;
@@ -580,7 +152,7 @@ void redrawFont(){
         }
         buffer[idx++] = redrawBuffer[i].character;
     }
-    
+
     if(idx > 0){
         sys_write(current, buffer, idx);
     }
@@ -588,13 +160,13 @@ void redrawFont(){
 
 // Aumenta tamaño de fuente y refresca contenido
 void shellIncreaseFontSize(){
-    sys_increase_fontsize(); 
+    sys_increase_fontsize();
     redrawFont();
 }
 
 // Disminuye tamaño de fuente y refresca contenido
-void shellDecreaseFontSize(){ 
-    sys_decrease_fontsize(); 
+void shellDecreaseFontSize(){
+    sys_decrease_fontsize();
     redrawFont();
 }
 
@@ -706,12 +278,12 @@ void printDate(){
     if(hour < 3){
         int day = ((dateBuff[0] >> 4) * 10) + (dateBuff[0] & 0x0F);
         day--;
-        
+
         if(day <= 0){
             day = 30;
             int month = ((dateBuff[1] >> 4) * 10) + (dateBuff[1] & 0x0F);
             month--;
-            
+
             if(month <= 0){
                month = 12;
                int year = ((dateBuff[2] >> 4) * 10) + (dateBuff[2] & 0x0F);
@@ -752,7 +324,7 @@ static int strcmp(const char *a, const char *b){
     }
 
     while(*a && (*a == *b)){
-        a++; 
+        a++;
         b++;
     }
 
