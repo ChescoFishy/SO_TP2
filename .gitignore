@@ -25,3 +25,7 @@ gha-creds-*.json
 .clangd/
 compile_commands.json
 .cache/
+
+
+#gsd
+.planning/
