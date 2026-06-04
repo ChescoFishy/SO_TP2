@@ -3,12 +3,10 @@
 #include "commands/commands.h"
 
 // cat: copia stdin a stdout hasta EOF. Pensado para pipes (ej. cat | filter).
-void cat_main(int argc, char **argv){
-    (void)argc; (void)argv;
-    char buf[128];
-    uint64_t n;
-    while((n = read_full(buf, sizeof(buf))) > 0){
-        sys_write(STDOUT, buf, n);
+void cat_main(int argc, char *argv[]){
+    for(int i = 0; i < argc; i++) {
+        sys_write(STDOUT, argv[i], sizeof(argv)+1);
     }
+    sys_write(STDOUT, "\n", 1);
     sys_exit(0);
 }
