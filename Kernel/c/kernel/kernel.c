@@ -57,6 +57,10 @@ void * getStackBase(void){
 void * initializeKernelBinary(void){
     void * moduleAddresses[] = {sampleCodeModuleAddress, sampleDataModuleAddress};
 
+    // Interrupciones deshabilitadas durante toda la inicializacion del kernel.
+    // Se rehabilitan solas cuando el scheduler lanza el primer proceso (iretq con IF=1).
+    _cli();
+
     loadModules(&endOfKernelBinary, moduleAddresses);
     clearBSS(&bss, &endOfKernel - &bss);
     load_idt();

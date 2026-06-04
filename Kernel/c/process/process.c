@@ -58,12 +58,18 @@ static void str_copy(char *dst, const char *src, int max){
 static uint64_t* build_initial_stack(void *stack_top, ProcessEntry entry, int argc, char **argv){
     uint64_t* sp = (uint64_t *)stack_top;
 
-    /* Hardware frame. Instruccion iretq espera encontrar estos valores
-    ** cuando retorna de una interrupcion o excepcion. */
+    /* Hardware frame. En long mode iretq SIEMPRE extrae 5 valores (RIP, CS,
+    ** RFLAGS, RSP, SS), aun sin cambio de privilegio (a diferencia del iret de
+    ** 32 bits). Hay que construir el frame completo igual que lo apilaria el
+    ** hardware al tomar una interrupcion; si faltan SS y RSP, iretq los toma de
+    ** memoria basura mas alla del frame y el proceso arranca con un stack pointer
+    ** invalido (tipicamente 0) -> page fault -> triple fault. */
+    *(--sp) = 0x0;                 /* SS: selector nulo (valido en ring 0 long mode) */
+    *(--sp) = (uint64_t)stack_top; /* RSP: el proceso arranca con su stack vacio */
     *(--sp) = 0x202;               /* RFLAGS: Interrupt Flag = 1 */
-    *(--sp) = 0x08;                /* CS: segmento de codigo del kernel */ 
+    *(--sp) = 0x08;                /* CS: segmento de codigo del kernel */
     *(--sp) = (uint64_t)entry;     /* RIP: punto de entrada. Asegura que iretq transiciona al segmento de codigo correcto. */
-    
+
 
     /* Registros General Purpose en orden de pushState */
     *(--sp) = 0;                   /* RAX */
