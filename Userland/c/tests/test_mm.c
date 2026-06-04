@@ -28,8 +28,6 @@ static void test_mm_loop(uint64_t max_memory) {
             if (mm_rqs[rq].address) {
                 total += mm_rqs[rq].size;
                 rq++;
-            } else {
-                break;
             }
         }
 
