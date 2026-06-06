@@ -1,7 +1,16 @@
 // Buffer de redraw: registra la salida por fd para re-renderizar al cambiar el
 // tamaño de fuente. Compartido por la shell (shell.c llama redraw_* via shellPutchar).
 #include <stdint.h>
+#include "lib/redraw.h"
 #include "lib/userlib.h"
+
+// Detalles internos del buffer (antes en userlib.h): solo los usa este modulo.
+#define REDRAW_BUFF 4096
+
+typedef struct{
+    char character;
+    uint64_t fd;
+}RedrawStruct;
 
 RedrawStruct redrawBuffer[REDRAW_BUFF];
 uint32_t redrawLength = 0;

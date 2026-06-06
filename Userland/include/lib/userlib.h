@@ -7,10 +7,16 @@
 #include <stdint.h>
 #include <memoryManager/memoryManager.h>
 
+/* Sub-headers de los modulos de c/lib/: userlib.h actua como fachada y los
+** agrega para que los consumidores que incluyen userlib.h sigan viendo la API. */
+#include "lib/strings.h"
+#include "lib/io.h"
+#include "lib/format.h"
+#include "lib/redraw.h"
+
 #define STDOUT 1
 #define STDERR 2
 #define REGSBUFF 500
-#define REDRAW_BUFF 4096
 #define KB 1024
 #define BM_BUFF 20
 #define NOTE_C4  262
@@ -52,14 +58,6 @@ typedef struct {
     uint8_t  foreground;
     uint64_t rsp;
 } ProcessInfo;
-
-typedef struct{
-    char character;
-    uint64_t fd;
-}RedrawStruct;
-
-void redraw_reset(void);
-void redraw_append_char(char c, uint64_t fd);
 
 // ─── Syscalls de IO ───────────────────────────────────────────────────────────
 uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count);
@@ -111,10 +109,8 @@ int64_t  sys_create_process_fd(const char *name, void *entry,
                                uint64_t fg_fdin_fdout);
 
 // ─── Utilitarios ─────────────────────────────────────────────────────────────
-uint64_t putchar(char c);
-char getchar(void);
+// putchar/getchar/read_full/next_uint → lib/io.h; num_to_str → lib/format.h.
 void processLine(char * buff, uint32_t * history_len);
-uint64_t num_to_str(uint64_t value, char * dest, int base);
 void gen_invalid_opcode(void);
 
 // ─── Argumentos del comando actual ────────────────────────────────────────────
@@ -134,9 +130,6 @@ void playBeep(void);
 void invOp(void);
 uint8_t adjustHour(uint8_t hour, int offset);
 void printTimeAndDate(uint8_t* buff, char separator);
-void shellIncreaseFontSize(void);
-void shellDecreaseFontSize(void);
-void redrawFont(void);
 void bmMEM(void);
 void bmCPU(void);
 void bmFPS(void);

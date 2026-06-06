@@ -1,7 +1,7 @@
 // I/O de bajo nivel y parsing de argumentos compartido por los comandos.
 #include <stdint.h>
+#include "lib/io.h"
 #include "lib/userlib.h"
-#include "commands/commands.h"
 
 // putchar usando sys_write
 uint64_t putchar(char c){

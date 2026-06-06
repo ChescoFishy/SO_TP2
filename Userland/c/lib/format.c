@@ -1,6 +1,5 @@
 // Conversion numerica para entorno freestanding (sin libc).
-#include <stdint.h>
-#include "lib/userlib.h"
+#include "lib/format.h"
 
 /* Convierte un entero sin signo a cadena en la base indicada.
    - value: número a convertir.
