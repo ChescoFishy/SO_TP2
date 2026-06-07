@@ -19,4 +19,9 @@ uint64_t read_full(char *buf, uint64_t n);
 ** Compartido por los comandos kill/nice/block. */
 int64_t next_uint(const char **pp);
 
+// print/scan con formato (simil printf/scanf): %d %u %x %s %c %%.
+// print devuelve los caracteres escritos; scan, la cantidad de campos asignados.
+int print(const char *fmt, ...);
+int scan(const char *fmt, ...);
+
 #endif
