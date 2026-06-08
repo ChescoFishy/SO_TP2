@@ -8,6 +8,7 @@
 
 // ─── Comandos-proceso (entry de sys_create_process, admiten & y |) ────────────
 void cat_main(int argc, char **argv);
+void echo_main(int argc, char **argv);
 void wc_main(int argc, char **argv);
 void filter_main(int argc, char **argv);
 void loop_main(int argc, char **argv);
