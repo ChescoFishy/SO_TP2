@@ -1,4 +1,5 @@
 GLOBAL sys_write
+GLOBAL sys_write_color
 GLOBAL sys_read
 GLOBAL sys_registers
 GLOBAL sys_time
@@ -166,6 +167,11 @@ sys_read:
 
 sys_write:
 	mov rax, 4
+	int 0x80
+	ret
+
+sys_write_color:
+	mov rax, 37
 	int 0x80
 	ret
 

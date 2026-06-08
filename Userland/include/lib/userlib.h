@@ -62,6 +62,7 @@ typedef struct {
 
 // ─── Syscalls de IO ───────────────────────────────────────────────────────────
 uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count);
+uint64_t sys_write_color(uint64_t fd, const char * buff, uint64_t count, uint32_t color);
 uint64_t sys_read(char * buff, uint64_t count);
 uint64_t sys_registers(char * buff);
 void sys_time(uint8_t * buff);
