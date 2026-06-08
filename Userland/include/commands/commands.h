@@ -12,6 +12,7 @@ void echo_main(int argc, char **argv);
 void astdin_main(int argc, char **argv);
 void wc_main(int argc, char **argv);
 void filter_main(int argc, char **argv);
+void red_main(int argc, char **argv);
 void loop_main(int argc, char **argv);
 void mvar_main(int argc, char **argv);
 

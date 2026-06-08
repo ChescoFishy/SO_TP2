@@ -42,6 +42,7 @@ Command commands[] = {
     {"astdin",    0,        astdin_main,     "emite la letra 'a' por stdout (para pipes)"},
     {"wc",        0,        wc_main,         "cuenta lineas en stdin"},
     {"filter",    0,        filter_main,     "filtra las vocales de stdin"},
+    {"red",       0,        red_main,        "imprime stdin en rojo"},
     {"loop",      0,        loop_main,       "[ticks]   imprime su PID periodicamente"},
     {"mvar",      0,        mvar_main,       "<w> <r>   demo MVar lectores/escritores"},
     {0, 0, 0, 0},
