@@ -1,4 +1,4 @@
-# MASS OS — TP2 Sistemas Operativos (ITBA)
+# TP2 Sistemas Operativos (ITBA)
 
 Kernel bare-metal x86-64 que corre directamente sobre QEMU o hardware real, sin sistema operativo subyacente. Implementa memoria, procesos, scheduling y syscalls desde cero.
 
