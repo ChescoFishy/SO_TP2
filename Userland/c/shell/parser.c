@@ -39,6 +39,7 @@ Command commands[] = {
     {"test_sync", 0,        test_sync_main,  "<n> <s>   test de sincronizacion"},
     {"cat",       0,        cat_main,        "imprime stdin tal como lo recibe"},
     {"echo",      0,        echo_main,       "imprime sus argumentos"},
+    {"astdin",    0,        astdin_main,     "emite la letra 'a' por stdout (para pipes)"},
     {"wc",        0,        wc_main,         "cuenta lineas en stdin"},
     {"filter",    0,        filter_main,     "filtra las vocales de stdin"},
     {"loop",      0,        loop_main,       "[ticks]   imprime su PID periodicamente"},
