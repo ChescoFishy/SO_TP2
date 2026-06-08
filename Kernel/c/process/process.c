@@ -380,6 +380,9 @@ uint64_t process_ps(ProcessInfo *buf, uint64_t max){
             buf[count].state = (uint8_t)p->state;
             buf[count].foreground = p->foreground;
             buf[count].rsp = (uint64_t)p->rsp;
+            /* RBP guardado en el frame de pushState: con p->rsp apuntando al slot
+            ** R15, el orden es r15,r14,r13,r12,r11,r10,r9,r8,rsi,rdi,rbp,... -> [10]. */
+            buf[count].rbp = (p->rsp != NULL) ? p->rsp[10] : 0;
             str_copy(buf[count].name, p->name, MAX_NAME_LEN);
             count++;
         }

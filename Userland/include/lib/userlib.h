@@ -57,6 +57,7 @@ typedef struct {
     uint8_t  state;
     uint8_t  foreground;
     uint64_t rsp;
+    uint64_t rbp;
 } ProcessInfo;
 
 // ─── Syscalls de IO ───────────────────────────────────────────────────────────

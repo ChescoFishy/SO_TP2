@@ -47,6 +47,7 @@ typedef struct{
     uint8_t state;
     uint8_t foreground;
     uint64_t rsp;
+    uint64_t rbp;
 } ProcessInfo;
 
 void process_init(void);
