@@ -56,4 +56,7 @@ int64_t  sys_create_process_fd(uint64_t name, uint64_t entry,
 // Syscalls 36 (pipes nombrados)
 int64_t  sys_pipe_open(const char *name, uint64_t fds);
 
+// Syscall 37 (escritura con color)
+uint64_t sys_write_color(uint64_t fd, const char * buff, uint64_t count, uint32_t color);
+
 #endif

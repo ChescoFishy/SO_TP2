@@ -59,6 +59,27 @@ uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
     return count;
 }
 
+/* sys_write_color: igual que sys_write pero permite elegir el color del texto en
+** consola. Si el fd fisico es un pipe el color se ignora (los bytes viajan crudos),
+** asi un comando coloreado (ej. red) sigue funcionando encadenado por pipe. */
+uint64_t sys_write_color(uint64_t fd, const char * buff, uint64_t count, uint32_t color){
+    PCB *cur = process_current();
+    int phys_fd = 1;  /* default: consola */
+    if (cur != NULL && fd < 2) {
+        phys_fd = cur->fd[fd];
+    }
+
+    if (pipe_is_fd(phys_fd)) {
+        int64_t n = pipe_write(phys_fd, buff, count);
+        return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
+    }
+
+    for(uint64_t i = 0; i < count; i++){
+        videoPutChar((uint8_t)buff[i], color);
+    }
+    return count;
+}
+
 /* Valor de retorno de sys_read cuando el proceso se bloqueo esperando teclado:
 ** userland debe reintentar (ver READ_RETRY en userlib.h). Distinto de 0 (EOF)
 ** y de -1 (error de pipe). Permite que cat/wc/filter funcionen tanto con
@@ -279,4 +300,5 @@ void * syscalls[CANT_SYS] = {
     &sys_pipe_close,        // 34
     &sys_create_process_fd, // 35
     &sys_pipe_open,         // 36
+    &sys_write_color,       // 37
 };
