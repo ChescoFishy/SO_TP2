@@ -40,7 +40,7 @@ void redrawFont(){
         return;
     }
 
-    char buffer[REDRAW_BUFF];
+    static char buffer[REDRAW_BUFF];
 
     uint64_t current = redrawBuffer[0].fd;
     uint32_t idx = 0;
