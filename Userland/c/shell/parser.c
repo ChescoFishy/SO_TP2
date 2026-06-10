@@ -15,7 +15,8 @@ Command commands[] = {
     /* Builtins: corren sincronicamente en la shell. No admiten & ni |. */
     {"help",      help,                 0,             "muestra esta ayuda"},
     {"clear",     clear,                0,             "limpia la pantalla"},
-/*  ======================COMANDOS DE ARQUI===========================================*/
+
+/*  ====================== COMANDOS DE ARQUI ===========================================*/
     // {"printTime", printTime,            0,             "imprime la hora actual"},
     // {"printDate", printDate,            0,             "imprime la fecha actual"},
     // {"registers", registers,            0,             "imprime registros (CTRL para capturar)"},
@@ -27,6 +28,7 @@ Command commands[] = {
     // {"bmMEM",     bmMEM,                0,             "bengchmark de memoria"},
     // {"bmKEY",     bmKEY,                0,             "mide latencia de tecla"},
 /*  ===================================================================================*/
+
     {"ps",        ps,                   0,             "lista los procesos activos"},
     {"mem",       mem_cmd,              0,             "estado de la memoria"},
     {"kill",      kill_cmd,             0,             "<pid>      mata un proceso"},
