@@ -12,6 +12,8 @@ GLOBAL _irq03Handler
 GLOBAL _irq04Handler
 GLOBAL _irq05Handler
 GLOBAL _irq128Handler
+GLOBAL _irq129Handler
+GLOBAL kernel_yield
 GLOBAL _exception0Handler
 GLOBAL _exception6Handler
 GLOBAL syscallIntRoutine
@@ -315,6 +317,30 @@ _irq128Handler:
 .no_yield:
 	popState
 	iretq
+
+; ─── Yield de kernel (int 0x81) ───────────────────────────────────────────────
+; Cede la CPU desde adentro de una syscall (p.ej. sem_wait bloqueante). A
+; diferencia del gate de 0x80, no pasa por el dispatcher ni manda EOI (es una
+; interrupcion de software): guarda el contexto en el stack del proceso actual
+; y salta al siguiente READY. Al ser despertado y re-elegido, el proceso retoma
+; exactamente despues del int 0x81.
+_irq129Handler:
+	pushState
+
+	; El switch ocurre ya mismo: limpiar force_switch (seteado por
+	; process_block) para no pagar un yield extra al salir del int 0x80 externo.
+	mov qword [force_switch], 0
+	mov rdi, rsp
+	call scheduler_yield_impl   ; retorna RSP del proximo proceso
+	mov rsp, rax
+
+	popState
+	iretq
+
+; void kernel_yield(void) — wrapper invocable desde C del kernel
+kernel_yield:
+	int 0x81
+	ret
 
 ; ─── scheduler_start_asm ──────────────────────────────────────────────────────
 ; void scheduler_start_asm(uint64_t *rsp)

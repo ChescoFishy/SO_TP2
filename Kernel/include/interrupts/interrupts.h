@@ -10,9 +10,14 @@ void _irq03Handler(void);
 void _irq04Handler(void);
 void _irq05Handler(void);
 void _irq128Handler(void);
+void _irq129Handler(void);
 void _exception0Handler(void);
 void _exception6Handler(void);
  
+/* Cede la CPU desde adentro del kernel (int 0x81). Usado por sem_wait para
+** bloquear al proceso actual en medio de una syscall. */
+void kernel_yield(void);
+
 void _cli(void);
 void _sti(void);
 void _hlt(void);

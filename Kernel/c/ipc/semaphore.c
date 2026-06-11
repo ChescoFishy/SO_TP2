@@ -1,6 +1,7 @@
 #include "ipc/semaphore.h"
 #include "process/process.h"
 #include "process/scheduler.h"
+#include "interrupts/interrupts.h"
 #include <stddef.h>
 
 /* Primitivas atomicas (xchg) definidas en libasm.asm. Protegen el acceso al
@@ -118,37 +119,46 @@ int64_t sem_open(const char *name, uint64_t initial_value) {
     return 1;
 }
 
-/* Decrementa el semáforo; bloquea el proceso actual si value < 0. */
+/* Decrementa el semáforo; bloquea el proceso actual si no hay tokens.
+** Bloqueo REAL: cede la CPU via kernel_yield (int 0x81) y recién retorna con
+** el token adquirido. Esto permite llamarlo desde adentro del kernel
+** (pipe_read/pipe_write) con código después del wait. Semántica Mesa: al
+** despertar re-chequea value, porque otro proceso pudo ganarle el token. */
 int64_t sem_wait(const char *name) {
     if (!name) return -1;
 
-    acquire(&sem_lock);
+    while (1) {
+        acquire(&sem_lock);
 
-    Semaphore *s = find_sem(name);
-    if (!s) {
-        release(&sem_lock);
-        return -1;
-    }
+        Semaphore *s = find_sem(name);
+        if (!s) {
+            release(&sem_lock);
+            return -1;
+        }
 
-    s->value--;
+        if (s->value > 0) {
+            s->value--;
+            release(&sem_lock);
+            return 0;   /* recién acá el recurso está adquirido */
+        }
 
-    if (s->value < 0) {
         PCB *cur = process_current();
         if (cur == NULL) {
             release(&sem_lock);
             return -1;
         }
         queue_push(s, cur->pid);
-        process_block(cur->pid); /* también setea force_switch si es el actual */
-    }
+        process_block(cur->pid);
 
-    /* El context switch real ocurre al volver al handler de syscall (tras
-    ** retornar de sem_wait), por lo que liberamos el lock antes de ceder CPU. */
-    release(&sem_lock);
-    return 0;
+        /* Soltar el lock ANTES de ceder la CPU (nadie puede correr en el
+        ** medio: las syscalls corren con IF=0). Duerme acá hasta que un
+        ** sem_post lo desencole y el scheduler lo re-elija. */
+        release(&sem_lock);
+        kernel_yield();
+    }
 }
 
-/* Incrementa el semáforo; despierta un proceso en espera si value <= 0. */
+/* Incrementa el semáforo; despierta un proceso en espera (que re-chequea). */
 int64_t sem_post(const char *name) {
     if (!name) return -1;
 
@@ -162,7 +172,7 @@ int64_t sem_post(const char *name) {
 
     s->value++;
 
-    if (s->value <= 0 && s->wait_count > 0) {
+    if (s->wait_count > 0) {
         uint64_t pid = queue_pop(s);
         process_unblock(pid);
     }
