@@ -111,11 +111,6 @@ los de foreground antes de mostrar de nuevo el prompt.
 | `kill` | `<pid>` | Mata el proceso con ese PID. |
 | `nice` | `<pid> <prioridad>` | Cambia la prioridad (1–5) de un proceso. |
 | `block` | `<pid>` | Alterna el estado del proceso entre BLOCKED y READY. |
-| `printTime` / `printDate` | — | Hora y fecha del sistema (UTC-3). |
-| `registers` | — | Dump de registros (presionar `Ctrl` antes para capturarlos). |
-| `testDiv0` / `invOp` | — | Disparan excepción #DE / #UD. |
-| `playBeep` | — | Toca una melodía por el parlante. |
-| `bmFPS` / `bmCPU` / `bmMEM` / `bmKEY` | — | Benchmarks. |
 
 ### Comandos *proceso* (admiten `&` y `|`)
 
