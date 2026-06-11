@@ -18,6 +18,10 @@ void _exception6Handler(void);
 ** bloquear al proceso actual en medio de una syscall. */
 void kernel_yield(void);
 
+/* Termina el proceso actual via la syscall sys_exit(0) (int 0x80). No
+** retorna. Usado por el trampolin de entrada cuando un entry retorna. */
+void kernel_exit(void);
+
 void _cli(void);
 void _sti(void);
 void _hlt(void);

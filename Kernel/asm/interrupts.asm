@@ -14,6 +14,7 @@ GLOBAL _irq05Handler
 GLOBAL _irq128Handler
 GLOBAL _irq129Handler
 GLOBAL kernel_yield
+GLOBAL kernel_exit
 GLOBAL _exception0Handler
 GLOBAL _exception6Handler
 GLOBAL syscallIntRoutine
@@ -341,6 +342,15 @@ _irq129Handler:
 kernel_yield:
 	int 0x81
 	ret
+
+; void kernel_exit(void) — invoca sys_exit(0) via int 0x80. No retorna:
+; process_exit libera el proceso y el scheduler nunca vuelve a este contexto.
+; Usado por process_entry_wrapper cuando un entry retorna sin llamar sys_exit.
+kernel_exit:
+	mov rax, 20        ; nro de sys_exit en la tabla syscalls[] del dispatcher
+	xor rdi, rdi       ; retval = 0
+	int 0x80
+	jmp kernel_exit    ; defensivo: no deberia alcanzarse
 
 ; ─── scheduler_start_asm ──────────────────────────────────────────────────────
 ; void scheduler_start_asm(uint64_t *rsp)

@@ -3,6 +3,7 @@
 #include "memoryManager/memoryManager.h"
 #include "lib/lib.h"
 #include "ipc/pipe.h"
+#include "interrupts/interrupts.h"
 #include <stddef.h>
 
 /* Tabla de procesos del Kernel. */
@@ -51,8 +52,17 @@ static void str_copy(char *dst, const char *src, int max){
 // este layout desde la cima del stack hacia abajo.
 
 
-/* 
-** Construye el frame inicial del stack. 
+/* Trampolin de entrada: todo proceso arranca aca (es el RIP del frame
+** inicial). El stack inicial esta vacio — no hay direccion de retorno — asi
+** que si el entry retorna sin llamar sys_exit, se lo termina prolijamente via
+** la syscall de exit en lugar de que el ret salte a basura fuera del stack. */
+static void process_entry_wrapper(ProcessEntry entry, uint64_t argc, char **argv){
+    entry((int)argc, argv);
+    kernel_exit();
+}
+
+/*
+** Construye el frame inicial del stack.
 ** Prepara el mecanismo para el context switching.
 */
 static uint64_t* build_initial_stack(void *stack_top, ProcessEntry entry, int argc, char **argv){
@@ -68,17 +78,17 @@ static uint64_t* build_initial_stack(void *stack_top, ProcessEntry entry, int ar
     *(--sp) = (uint64_t)stack_top; /* RSP: el proceso arranca con su stack vacio */
     *(--sp) = 0x202;               /* RFLAGS: Interrupt Flag = 1 */
     *(--sp) = 0x08;                /* CS: segmento de codigo del kernel */
-    *(--sp) = (uint64_t)entry;     /* RIP: punto de entrada. Asegura que iretq transiciona al segmento de codigo correcto. */
+    *(--sp) = (uint64_t)process_entry_wrapper; /* RIP: trampolin que llama al entry y hace exit si retorna */
 
 
     /* Registros General Purpose en orden de pushState */
     *(--sp) = 0;                   /* RAX */
     *(--sp) = 0;                   /* RBX */
     *(--sp) = 0;                   /* RCX */
-    *(--sp) = 0;                   /* RDX */
+    *(--sp) = (uint64_t)argv;      /* RDX → arg3 del trampolin (argv) */
     *(--sp) = 0;                   /* RBP */
-    *(--sp) = (uint64_t)argc;      /* RDI → arg1 de la funcion de entrada */
-    *(--sp) = (uint64_t)argv;      /* RSI → arg2 de la funcion de entrada */
+    *(--sp) = (uint64_t)entry;     /* RDI → arg1 del trampolin (entry real) */
+    *(--sp) = (uint64_t)argc;      /* RSI → arg2 del trampolin (argc) */
     *(--sp) = 0;                   /* R8 */
     *(--sp) = 0;                   /* R9 */
     *(--sp) = 0;                   /* R10 */
