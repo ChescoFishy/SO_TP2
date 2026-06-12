@@ -1,91 +1,136 @@
 #include <stdint.h>
 #include "lib/userlib.h"
+#include "lib/io.h"
 #include "tests/test_util.h"
 #include "commands/commands.h"
 
-/* ── mvar: problema lectores/escritores con una MVar sincronizada ──────────────
-** Una MVar es una celda que esta llena o vacia. put() espera a que este vacia,
-** take() espera a que este llena. Se sincroniza con dos semaforos nombrados
-** (procesos no relacionados podrian compartirlos). Como todos los procesos de
-** usuario comparten el espacio de direcciones, la celda es una global. */
+/* mvar: demo de una MVar (celda compartida de un caracter) con N escritores
+** y M lectores sincronizados por dos semaforos nombrados (empty/full).
+** Cada escritor deposita su letra cuando la celda esta vacia; cada lector
+** la consume y la imprime en su color. Los hijos corren en background y se
+** frenan con kill (ver sus pids con ps). */
 
-#define MVAR_EMPTY     "mvar_empty"   /* tokens de slot vacio (init 1) */
-#define MVAR_FULL      "mvar_full"    /* tokens de slot lleno  (init 0) */
-#define MVAR_ITEMS     5              /* items que produce cada escritor */
+#define INTERVAL_MAX 20
+#define MAX_WRITERS  26
+#define MAX_READERS  7
 
-static int64_t mvar_cell;             /* la celda compartida */
+#define SEM_EMPTY "mvar_empty"
+#define SEM_FULL  "mvar_full"
 
-/* Arma un argv en heap (leak intencional: lo consume el proceso hijo, que vive
-** mas que mvar_main). Cada string entera ocupa 24 bytes de holgura. */
-static char **mvar_make_argv(int n, int a, int b){
-    uint64_t header = sizeof(char *) * (uint64_t)(n + 1);
-    char **v = (char **)sys_malloc(header + 24 * (uint64_t)n);
-    if(!v) return 0;
-    char *s0 = (char *)v + header;
-    num_to_str((uint64_t)a, s0, 10);
-    v[0] = s0;
-    if(n >= 2){
-        char *s1 = s0 + 24;
-        num_to_str((uint64_t)b, s1, 10);
-        v[1] = s1;
-    }
-    v[n] = 0;
-    return v;
+/* Celda compartida: alcanza una global porque todo userland comparte el
+** espacio de direcciones. */
+static char mvar_value;
+
+/* Los argv de los hijos deben sobrevivir al retorno de mvar_main (su stack
+** se libera al terminar), por eso viven en estaticos y no en el stack. */
+static char  writer_letters[MAX_WRITERS][2];
+static char *writer_argvs[MAX_WRITERS][1];
+static char  reader_index[MAX_READERS][2];
+static char *reader_argvs[MAX_READERS][1];
+
+static const uint32_t reader_colors[MAX_READERS] = {
+    0xFFFFFF, /* blanco   */
+    0xFF5555, /* rojo     */
+    0x55FF55, /* verde    */
+    0x5555FF, /* azul     */
+    0xFFFF55, /* amarillo */
+    0xFF55FF, /* magenta  */
+    0x55FFFF, /* cyan     */
+};
+
+/* Espera un intervalo aleatorio de ticks del timer (~18/seg) cediendo la CPU
+** mientras tanto. GetUniform comparte estado entre procesos (mismo address
+** space), lo que desfasa a los hijos entre si sin necesidad de seed propia. */
+static void random_wait(void) {
+    uint64_t target = sys_ticks() + GetUniform(INTERVAL_MAX);
+    while (sys_ticks() < target)
+        sys_yield();
 }
 
-static void mvar_writer(int argc, char **argv){
-    int items = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    int id    = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
-    for(int k = 0; k < items; k++){
-        sys_sem_wait(MVAR_EMPTY);     /* esperar slot vacio */
-        mvar_cell = id * 1000 + k;    /* poner valor */
-        sys_sem_post(MVAR_FULL);      /* avisar slot lleno */
+/* Entry point del escritor. argv[0] = su letra ("A".."Z"). */
+static void writer_main(int argc, char **argv) {
+    if (argc < 1 || argv == 0 || argv[0] == 0)
+        sys_exit(-1);
+    char letter = argv[0][0];
+
+    while (1) {
+        random_wait();
+
+        sys_sem_wait(SEM_EMPTY);
+        mvar_value = letter;
+        sys_sem_post(SEM_FULL);
     }
-    sys_exit(0);
 }
 
-static void mvar_reader(int argc, char **argv){
-    int count = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    uint64_t pid = sys_getpid();
-    for(int k = 0; k < count; k++){
-        sys_sem_wait(MVAR_FULL);      /* esperar slot lleno */
-        int64_t v = mvar_cell;        /* tomar valor */
-        sys_sem_post(MVAR_EMPTY);     /* avisar slot vacio */
-        printf("[reader %d] leyo %d\n", (int)pid, (int)v);
+/* Entry point del lector. argv[0] = indice de color ("0".."6"). */
+static void reader_main(int argc, char **argv) {
+    if (argc < 1 || argv == 0 || argv[0] == 0)
+        sys_exit(-1);
+    uint32_t color = reader_colors[argv[0][0] - '0'];
+
+    while (1) {
+        random_wait();
+
+        sys_sem_wait(SEM_FULL);
+        char c = mvar_value;
+        sys_write_color(STDOUT, &c, 1, color);
+        sys_sem_post(SEM_EMPTY);
     }
-    sys_exit(0);
 }
 
-void mvar_main(int argc, char **argv){
-    int W = (argc >= 1 && argv && argv[0]) ? (int)satoi(argv[0]) : 0;
-    int R = (argc >= 2 && argv[1])         ? (int)satoi(argv[1]) : 0;
-    if(W <= 0 || R <= 0){
+/* mvar <n_escritores> <n_lectores> */
+void mvar_main(int argc, char **argv) {
+    if (argc < 2 || argv == 0 || argv[0] == 0 || argv[1] == 0) {
         printf("uso: mvar <escritores> <lectores>\n");
         sys_exit(-1);
     }
 
-    /* total de items: se reparten entre los lectores para que ninguno quede
-    ** bloqueado esperando algo que nunca llega (sum lecturas == sum escrituras). */
-    int total = W * MVAR_ITEMS;
-    int base  = total / R;
-    int extra = total % R;
+    int64_t writers = satoi(argv[0]);
+    int64_t readers = satoi(argv[1]);
 
-    /* (re)inicializar los semaforos del MVar en valores conocidos. */
-    sys_sem_close(MVAR_EMPTY);
-    sys_sem_close(MVAR_FULL);
-    sys_sem_open(MVAR_EMPTY, 1);
-    sys_sem_open(MVAR_FULL, 0);
-
-    for(int i = 0; i < W; i++){
-        char **av = mvar_make_argv(2, MVAR_ITEMS, i);
-        sys_create_process("mvar_wr", (void *)mvar_writer, 2, av, 0);
+    if (writers < 1 || writers > MAX_WRITERS) {
+        printf("mvar: escritores debe estar entre 1 y %d\n", MAX_WRITERS);
+        sys_exit(-1);
     }
-    for(int i = 0; i < R; i++){
-        int cnt = base + (i < extra ? 1 : 0);
-        char **av = mvar_make_argv(1, cnt, 0);
-        sys_create_process("mvar_rd", (void *)mvar_reader, 1, av, 0);
+    if (readers < 1 || readers > MAX_READERS) {
+        printf("mvar: lectores debe estar entre 1 y %d\n", MAX_READERS);
+        sys_exit(-1);
     }
 
-    /* terminar inmediatamente, sin esperar a los hijos (como pide el enunciado). */
+    /* Purgar semaforos de corridas anteriores: sem_open sobre un nombre
+    ** existente conserva el valor viejo y romperia el invariante inicial. */
+    while (sys_sem_close(SEM_EMPTY) == 0)
+        ;
+    while (sys_sem_close(SEM_FULL) == 0)
+        ;
+
+    mvar_value = 0;
+    if (!sys_sem_open(SEM_EMPTY, 1) || !sys_sem_open(SEM_FULL, 0)) {
+        printf("mvar: ERROR abriendo semaforos\n");
+        sys_exit(-1);
+    }
+
+    for (int i = 0; i < writers; i++) {
+        writer_letters[i][0] = (char)('A' + i);
+        writer_letters[i][1] = '\0';
+        writer_argvs[i][0]   = writer_letters[i];
+        if (sys_create_process("mvar_writer", (void *)writer_main,
+                               1, writer_argvs[i], 0) <= 0) {
+            printf("mvar: ERROR creando escritor\n");
+            sys_exit(-1);
+        }
+    }
+
+    for (int i = 0; i < readers; i++) {
+        reader_index[i][0] = (char)('0' + i);
+        reader_index[i][1] = '\0';
+        reader_argvs[i][0] = reader_index[i];
+        if (sys_create_process("mvar_reader", (void *)reader_main,
+                               1, reader_argvs[i], 0) <= 0) {
+            printf("mvar: ERROR creando lector\n");
+            sys_exit(-1);
+        }
+    }
+
     sys_exit(0);
 }
