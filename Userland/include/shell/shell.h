@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define CURSOR '_'
 #define STDIN  0
 #define STDOUT 1
 #define WELCOME "  ____ ___ _____ _   ___     _______ _   _ ___ ____   ___  ____  _ \n" \

@@ -78,6 +78,9 @@ uint64_t sys_screen_width(void);
 uint64_t sys_screen_height(void);
 void sys_putpixel(uint32_t color, uint64_t x, uint64_t y);
 void sys_fill_rect(uint64_t x, uint64_t y, uint64_t w, uint64_t h, uint32_t color);
+/* Muestra (1) u oculta (0) el cursor parpadeante de la consola; lo dibuja y
+** parpadea el kernel, y toda escritura a pantalla lo desplaza por delante. */
+void sys_set_cursor(uint64_t on);
 
 // ─── Syscalls de memoria ──────────────────────────────────────────────────────
 void *sys_malloc(uint64_t size);

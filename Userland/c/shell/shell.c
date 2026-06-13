@@ -1,23 +1,6 @@
 #include "shell/shell.h"
 #include "lib/userlib.h"
 
-static int cursorVisible = 0;
-static void showCursor(void){
-    if(!cursorVisible){
-        char cursor = CURSOR;
-        sys_write(STDOUT, &cursor, 1);
-        cursorVisible = 1;
-    }
-}
-
-static void hideCursor(void){
-    if(cursorVisible){
-        char backspace = '\b';
-        sys_write(STDOUT, &backspace, 1);
-        cursorVisible = 0;
-    }
-}
-
 // Bucle principal de la shell de usuario
 int main(void){
     shellPrintString(WELCOME);
@@ -27,9 +10,9 @@ int main(void){
     char buff[BUFF_LENGTH];
     while(1){
         shellPrintString("> ");
-        showCursor();
+        sys_set_cursor(1);
         shellReadLine(buff, BUFF_LENGTH);
-        hideCursor();
+        sys_set_cursor(0);
         shellNewline();
         processLine(buff, 0);
     }
@@ -37,62 +20,39 @@ int main(void){
     return 0;
 }
 
-// Lee una línea desde teclado con cursor parpadeante
+/* Lee una línea desde teclado. El cursor parpadeante lo dibuja el kernel
+** (sys_set_cursor): cualquier escritura a consola — de la shell o de un
+** proceso en background — lo desplaza por delante, como en una terminal. */
 void shellReadLine(char * buffer, uint64_t max){
     char c;
     uint32_t idx = 0;
-    uint64_t lastBlink = sys_ticks();
-    const uint64_t blinkInterval = 9; // ~0.5s si 18 ticks ~ 1s
-
-    // Asegurar que el cursor esté visible al iniciar la lectura
-    showCursor();
 
     while(1){
-        if(sys_read(&c, 1) == 1){
-            if(c == '\n'){
-                break;
-            }
+        if(sys_read(&c, 1) != 1){
+            continue; // READ_RETRY: el proceso durmió esperando una tecla
+        }
 
-            if(c == '\b'){
-                if(idx > 0){
-                    idx--;
-                    hideCursor();               // remover cursor '_'
-                    shellPutchar('\b', STDOUT); // borrar último carácter
-                    showCursor();               // volver a dibujar cursor
-                }
-            } else if(c == '+'){
-                // Aumentar fuente y redibujar contenido
-                hideCursor();
-                sys_increase_fontsize();
-                redrawFont();
-                showCursor();
-            } else if(c == '-'){
-                // Disminuir fuente y redibujar contenido
-                hideCursor();
-                sys_decrease_fontsize();
-                redrawFont();
-                showCursor();
-            } else {
-                if(idx + 1 < max){ // dejar lugar para terminador NUL
-                    buffer[idx++] = c;
-                    hideCursor();
-                    shellPutchar(c, STDOUT);
-                    showCursor();
-                }
-            }
+        if(c == '\n'){
+            break;
+        }
 
-            // Reiniciar temporizador de parpadeo tras cualquier input
-            lastBlink = sys_ticks();
+        if(c == '\b'){
+            if(idx > 0){
+                idx--;
+                shellPutchar('\b', STDOUT); // borrar último carácter
+            }
+        } else if(c == '+'){
+            // Aumentar fuente y redibujar contenido
+            sys_increase_fontsize();
+            redrawFont();
+        } else if(c == '-'){
+            // Disminuir fuente y redibujar contenido
+            sys_decrease_fontsize();
+            redrawFont();
         } else {
-            // Sin input: gestionar parpadeo
-            uint64_t now = sys_ticks();
-            if(now - lastBlink >= blinkInterval){
-                if(cursorVisible){
-                    hideCursor();
-                } else {
-                    showCursor();
-                }
-                lastBlink = now;
+            if(idx + 1 < max){ // dejar lugar para terminador NUL
+                buffer[idx++] = c;
+                shellPutchar(c, STDOUT);
             }
         }
     }

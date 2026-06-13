@@ -37,6 +37,7 @@ GLOBAL sys_pipe
 GLOBAL sys_pipe_close
 GLOBAL sys_pipe_open
 GLOBAL sys_create_process_fd
+GLOBAL sys_set_cursor
 
 section .text
 
@@ -172,6 +173,11 @@ sys_write:
 
 sys_write_color:
 	mov rax, 37
+	int 0x80
+	ret
+
+sys_set_cursor:
+	mov rax, 38
 	int 0x80
 	ret
 
