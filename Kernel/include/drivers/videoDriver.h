@@ -18,5 +18,7 @@ void videoPrint(const char *str, uint32_t color);
 void newLine(void);
 void scroll(void);
 void clearScreen(uint32_t color);
+void videoCursorSet(int enabled);
+void videoCursorBlink(void);
 
 #endif

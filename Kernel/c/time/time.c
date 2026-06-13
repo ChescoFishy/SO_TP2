@@ -1,5 +1,9 @@
 #include "time/time.h"
 #include "interrupts/interrupts.h"
+#include "drivers/videoDriver.h"
+
+/* Periodo de parpadeo del cursor de consola: ~0.5s a 18.2 Hz del PIT. */
+#define CURSOR_BLINK_TICKS 10
 
 unsigned char getSeconds(void);
 unsigned char getMinutes(void);
@@ -43,5 +47,8 @@ void time(unsigned char *buff){
 // Incrementa el contador en cada interrupción del PIT
 void timer_handler(){
 	ticks++;
+	if(ticks % CURSOR_BLINK_TICKS == 0){
+		videoCursorBlink();
+	}
 }
 

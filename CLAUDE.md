@@ -83,7 +83,7 @@ Both expose `mm_init / mm_malloc / mm_malloc_kernel / mm_free / mm_status`. The 
 
 ### Syscalls
 
-`Kernel/include/syscallDispatcher.h` lists all syscalls (`CANT_SYS = 37` in `defs.h`): 0–18 video/audio/memory, 19–28 processes, 29–32 semaphores, 33–36 pipes. Dispatched via `int 0x80` through the `syscalls[]` table in `syscallDispatcher.c` (the asm gate in `interrupts.asm` bounds-checks `rax` against the literal `37`). Userland calls them via `Userland/asm/userlib.asm` wrappers and `Userland/c/userlib.c` C wrappers. Adding a syscall requires: bumping `CANT_SYS` (and the literal in `_irq128Handler`), writing the `sys_*` function, adding it to the dispatcher table, and exposing a wrapper in `userlib`.
+`Kernel/include/syscallDispatcher.h` lists all syscalls (`CANT_SYS = 39` in `defs.h`): 0–18 video/audio/memory, 19–28 processes, 29–32 semaphores, 33–36 pipes, 37 write-with-color, 38 console cursor on/off. Dispatched via `int 0x80` through the `syscalls[]` table in `syscallDispatcher.c` (the asm gate in `interrupts.asm` bounds-checks `rax` against the literal `39`). Userland calls them via `Userland/asm/userlib.asm` wrappers and `Userland/c/userlib.c` C wrappers. Adding a syscall requires: bumping `CANT_SYS` (and the literal in `_irq128Handler`), writing the `sys_*` function, adding it to the dispatcher table, and exposing a wrapper in `userlib`.
 
 ### Userland linkage
 

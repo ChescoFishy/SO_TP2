@@ -38,6 +38,13 @@ void sys_clear(void){
     clearScreen(0x000000);
 }
 
+/* sys_set_cursor: muestra (on != 0) u oculta (on == 0) el cursor parpadeante
+** de la consola. La shell lo enciende mientras lee una linea y lo apaga al
+** ejecutar comandos; el dibujado y el parpadeo viven en el video driver. */
+void sys_set_cursor(uint64_t on){
+    videoCursorSet(on != 0);
+}
+
 /* sys_write: el fd logico (0=stdin, 1=stdout) se mapea a traves del PCB.
 ** Si el fd fisico es un pipe, se redirige; si no, va a la consola. */
 uint64_t sys_write(uint64_t fd, const char * buff, uint64_t count){
@@ -301,4 +308,5 @@ void * syscalls[CANT_SYS] = {
     &sys_create_process_fd, // 35
     &sys_pipe_open,         // 36
     &sys_write_color,       // 37
+    &sys_set_cursor,        // 38
 };

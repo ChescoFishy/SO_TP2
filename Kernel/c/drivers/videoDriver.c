@@ -48,12 +48,25 @@ static const int bgColor = 0x000000;         // Negro
 static uint64_t defaultTextSize = TEXT_SIZE; // Tamaño por defecto
 static void updateCursor(void);
 static void moveRight(void);
+static void newLineRaw(void);
+static void cursorErase(void);
+static void cursorDraw(void);
 static void drawChar(uint32_t x, uint32_t y, uint8_t c, uint32_t color,
                      uint64_t size);
 static void v_fillRectangle(uint64_t x0, uint64_t y0, uint64_t x1, uint64_t y1,
                             uint32_t color);
 static void drawFilledRect(uint32_t x, uint32_t y, uint32_t width,
                            uint32_t height, uint32_t color);
+
+/* Cursor de texto del driver: un '_' en la posicion actual de escritura que
+** parpadea desde el timer del kernel (videoCursorBlink). Toda salida de texto
+** lo borra antes de tocar la pantalla y lo redibuja despues, asi lo que
+** escribe cualquier proceso queda siempre delante del cursor, como si se
+** tipeara en una terminal. */
+#define CURSOR_CHAR '_'
+#define CURSOR_COLOR 0xFFFFFF
+static int cursorEnabled = 0; // la shell lo enciende mientras lee una linea
+static int cursorDrawn = 0;   // hay un '_' pintado en (currentX, currentY)
 
 // Ancho en píxeles del modo actual
 uint16_t getScreenWidth() { return vbe_mode_info->width; }
@@ -75,18 +88,22 @@ int validPosition(uint64_t x, uint64_t y) {
 /* FUNCIONES DE MODO TEXTO. */
 
 void increaseFontSize() {
+  cursorErase(); // borrar el '_' con el tamaño viejo antes de cambiarlo
   if (defaultTextSize < MAX_FONT_SIZE) {
     defaultTextSize++;
   }
 
   updateCursor();
+  cursorDraw();
 }
 
 void decreaseFontSize() {
+  cursorErase();
   if (defaultTextSize > 1) {
     defaultTextSize--;
   }
   updateCursor();
+  cursorDraw();
 }
 
 // Dibuja un pixel validando límites y BPP
@@ -127,8 +144,8 @@ void scroll() {
                   bgColor);
 }
 
-// Salta a la línea siguiente con scroll automático
-void newLine() {
+// Salta a la línea siguiente con scroll automático (sin gestionar el cursor)
+static void newLineRaw() {
   currentX = 0;
 
   uint64_t stepY = ((uint64_t)defaultTextSize * FONT_HEIGHT) / 4;
@@ -148,10 +165,17 @@ void newLine() {
   }
 }
 
-// Imprime un carácter en modo gráfico con soporte para \n y \b
-void videoPutChar(uint8_t c, uint32_t color) {
+// Salta a la línea siguiente con scroll automático
+void newLine() {
+  cursorErase();
+  newLineRaw();
+  cursorDraw();
+}
+
+// Imprime un carácter en modo texto (sin gestionar el cursor)
+static void putCharRaw(uint8_t c, uint32_t color) {
   if (c == '\n' || c == '\r') {
-    newLine();
+    newLineRaw();
     return;
   }
 
@@ -176,6 +200,13 @@ void videoPutChar(uint8_t c, uint32_t color) {
   updateCursor();
 }
 
+// Imprime un carácter en modo gráfico con soporte para \n y \b
+void videoPutChar(uint8_t c, uint32_t color) {
+  cursorErase();
+  putCharRaw(c, color);
+  cursorDraw();
+}
+
 // Imprime una cadena completa en color
 void videoPrint(const char *str, uint32_t color) {
   if (str == 0) {
@@ -195,7 +226,7 @@ static void moveRight() {
   if (currentX + stepX < vbe_mode_info->width) {
     currentX += stepX;
   } else {
-    newLine();
+    newLineRaw();
   }
 }
 
@@ -208,8 +239,53 @@ static void updateCursor() {
   if (stepY == 0)
     stepY = 1;
   if (!validPosition(currentX + stepX - 1, currentY + stepY - 1)) {
-    newLine();
+    newLineRaw();
   }
+}
+
+// Borra el '_' pintado en la posición actual, si lo hay
+static void cursorErase() {
+  if (!cursorDrawn)
+    return;
+  uint64_t stepX = ((uint64_t)FONT_WIDTH * defaultTextSize) / 4;
+  uint64_t stepY = ((uint64_t)FONT_HEIGHT * defaultTextSize) / 4;
+  if (stepX == 0)
+    stepX = 1;
+  if (stepY == 0)
+    stepY = 1;
+  v_fillRectangle(currentX, currentY, currentX + stepX, currentY + stepY,
+                  bgColor);
+  cursorDrawn = 0;
+}
+
+// Dibuja el '_' en la posición actual sin avanzarla, si el cursor está activo
+static void cursorDraw() {
+  if (!cursorEnabled || cursorDrawn)
+    return;
+  drawChar((uint32_t)currentX, currentY, CURSOR_CHAR, CURSOR_COLOR,
+           defaultTextSize);
+  cursorDrawn = 1;
+}
+
+// Muestra (1) u oculta (0) el cursor parpadeante de la consola
+void videoCursorSet(int enabled) {
+  if (enabled) {
+    cursorEnabled = 1;
+    cursorDraw();
+  } else {
+    cursorErase();
+    cursorEnabled = 0;
+  }
+}
+
+// Alterna la visibilidad del cursor; lo llama el timer del kernel
+void videoCursorBlink() {
+  if (!cursorEnabled)
+    return;
+  if (cursorDrawn)
+    cursorErase();
+  else
+    cursorDraw();
 }
 
 // Imprime una cadena en (x,y) con tamaño escalado
@@ -300,6 +376,8 @@ void clearScreen(uint32_t color) {
   drawFilledRect(0, 0, vbe_mode_info->width, vbe_mode_info->height, color);
   currentX = 0;
   currentY = 0;
+  cursorDrawn = 0; // el fill ya borro el '_' pintado
+  cursorDraw();
 }
 
 void fillRect(uint64_t x, uint64_t y, uint64_t w, uint64_t h, uint32_t color) {

@@ -59,4 +59,7 @@ int64_t  sys_pipe_open(const char *name, uint64_t fds);
 // Syscall 37 (escritura con color)
 uint64_t sys_write_color(uint64_t fd, const char * buff, uint64_t count, uint32_t color);
 
+// Syscall 38 (cursor de consola)
+void sys_set_cursor(uint64_t on);
+
 #endif
