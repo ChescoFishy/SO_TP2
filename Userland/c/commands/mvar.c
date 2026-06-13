@@ -53,6 +53,8 @@ static void writer_main(int argc, char **argv) {
         sys_exit(-1);
     char letter = argv[0][0];
 
+    sys_yield(); //Cedo temporalmente mi quantum para evitar superponerme al > de la shell
+
     while (1) {
         random_wait();
 
