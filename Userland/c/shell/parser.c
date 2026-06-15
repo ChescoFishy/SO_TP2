@@ -10,6 +10,7 @@
 #include "tests/test_proc.h"
 #include "tests/test_prio.h"
 #include "tests/test_sync.h"
+#include "tests/test_pipe.h"
 
 Command commands[] = {
     /* Builtins: corren sincronicamente en la shell. No admiten & ni |. */
@@ -39,6 +40,7 @@ Command commands[] = {
     {"test_proc", 0,        test_proc_main,  "<max>     test de procesos"},
     {"test_prio", 0,        test_prio_main,  "<target>  test de prioridades"},
     {"test_sync", 0,        test_sync_main,  "<n> <s>   test de sincronizacion"},
+    {"test_pipe", 0,        test_pipe_main,  "[bytes]   test de pipes (prod/cons)"},
     {"cat",       0,        cat_main,        "imprime stdin tal como lo recibe"},
     {"echo",      0,        echo_main,       "imprime sus argumentos"},
     {"astdin",    0,        astdin_main,     "emite la letra 'a' por stdout (para pipes)"},
