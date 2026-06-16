@@ -379,6 +379,12 @@ int process_waitpid(uint64_t pid){
 
 /* Obtiene información sobre los procesos en ejecución. */
 uint64_t process_ps(ProcessInfo *buf, uint64_t max){
+    /* Validacion defensiva: en ring 0 sin paginacion un puntero invalido
+    ** corromperia memoria silenciosamente en lugar de fallar de forma controlada. */
+    if(buf == NULL || max == 0){
+        return 0;
+    }
+
     uint64_t count = 0;
 
     for(int i = 0; i < MAX_PROCESSES && count < max; i++){

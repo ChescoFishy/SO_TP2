@@ -1,17 +1,17 @@
-// FF por First Fit -> algorimto de asignación de memoria (ver en el .md)
+// FF por First Fit -> algoritmo de asignación de memoria (ver en el .md)
 // Recorre la lista buscando el primer bloque libre con block->size >= size
 
 #include "memoryManager/memoryManager.h"
 #include <stddef.h>
 
 typedef struct MemBlock {
-    uint64_t size;              /* Tamano del bloque (sin contar el header) */
+    uint64_t size;              /* Tamaño del bloque (sin contar el header) */
     int is_free;                /* 1 si esta libre, 0 si esta asignado */
     int is_kernel;              /* 1 si fue asignado internamente por el kernel */
     struct MemBlock* next;      /* Siguiente bloque en la lista */
 } MemBlock;
 
-/* Tamano minimo para que valga la pena splitear el bloque de memoria libre. */ 
+/* Tamaño minimo para que valga la pena splitear el bloque de memoria libre. */
 #define MIN_SPLIT (sizeof(MemBlock) + 8)
 
 static MemBlock* heap_start = NULL;
@@ -80,10 +80,10 @@ void mm_free(void *ptr){
     MemBlock* block = (MemBlock*)ptr - 1;   /* Apunto al header del bloque a liberar. */
     block->is_free = 1;
 
-    /* Coalescensia hacia adelante. Absorber bloques libres consecutivos. */ 
+    /* Coalescencia hacia adelante. Absorber bloques libres consecutivos. */
     while(block->next != NULL && block->next->is_free){
 
-        /* Se lo come como el Dibu. */
+        /* Absorbe el bloque libre contiguo siguiente. */
         block->size += sizeof(MemBlock) + block->next->size;
         block->next = block->next->next;
     }

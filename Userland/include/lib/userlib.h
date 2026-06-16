@@ -13,6 +13,9 @@
 #include "lib/io.h"
 #include "lib/format.h"
 #include "lib/redraw.h"
+/* Prototipos de los builtins de la shell (help/clear/ps) y de los comandos-proceso.
+** Centralizados en commands.h; la fachada los reexporta por compatibilidad. */
+#include "commands/commands.h"
 
 #define STDOUT 1
 #define STDERR 2
@@ -124,9 +127,8 @@ void gen_invalid_opcode(void);
 // test_proc y test_prio.
 const char *cmd_args(void);
 
-// ─── Comandos de shell ────────────────────────────────────────────────────────
-void help(void);
-void clear(void);
+// ─── Comandos heredados de x64BareBones (no registrados en commands[]) ─────────
+// Se conservan como referencia; help/clear/ps viven ahora en commands/commands.h.
 void registers(void);
 void divideByZero(void);
 void printTime(void);
@@ -139,6 +141,5 @@ void bmMEM(void);
 void bmCPU(void);
 void bmFPS(void);
 void bmKEY(void);
-void ps(void);
 
 #endif
