@@ -16,7 +16,7 @@ admiten ejecución en background (`&`) y, en principio, conexión por pipes (`|`
 |---|---|---|---|
 | `test_mm`   | `test_mm <max_memory>`   | ❌ loop infinito | Memory manager: integridad y ausencia de solapamientos |
 | `test_proc` | `test_proc <max_procs>`  | ❌ loop infinito | Scheduler / gestión de PCBs bajo create/kill/block/unblock masivos |
-| `test_sync` | `test_sync <n> <use_sem>`| ✅ | Sincronización: race condition vs. semáforos |
+| `test_sync` | `test_sync <pares> <iteraciones> <use_sem>`| ✅ | Sincronización: race condition vs. semáforos |
 | `test_prio` | `test_prio <target>`     | ✅ | Prioridades del scheduler |
 
 > ⚠️ `test_mm` y `test_proc` corren en un `while(1)` y **nunca retornan por sí solos**:
@@ -128,8 +128,9 @@ agotar la tabla `MAX_PROCESSES`).
 
 ## `test_sync` — Sincronización (semáforos)
 
-**Uso:** `test_sync <n> <use_sem>` — `n` = iteraciones por proceso; `use_sem` = `1` usa
-semáforo, `0` no.
+**Uso:** `test_sync <pares> <iteraciones> <use_sem>` — `pares` = cantidad de pares de procesos a
+crear (se lanzan `2 × pares`); `iteraciones` = veces que cada worker incrementa/decrementa la
+variable compartida; `use_sem` = `1` usa semáforo, `0` no.
 **Archivo:** `Userland/c/tests/test_sync.c`.
 
 ### Qué hace
@@ -138,25 +139,31 @@ demuestra que **sin** semáforo el resultado es impredecible, mientras que **con
 siempre `0` (la sección crítica queda protegida).
 
 ### Cómo funciona
-1. Inicializa `global = 0` (variable global → compartida, porque hay un único espacio de
+1. **Valida los argumentos:** `pares` e `iteraciones` deben ser `> 0` y `use_sem ∈ {0, 1}`;
+   además `2 × pares` no puede superar `MAX_PROCESSES - 2`. Reserva con `sys_malloc` el arreglo de
+   PIDs (`2 × pares` entradas); si la reserva falla, aborta.
+2. Si `use_sem = 1`, **limpia** cualquier instancia previa del semáforo (`my_sem_close` en bucle)
+   y abre el semáforo nombrado `"sem"` con valor inicial `1`.
+3. Inicializa `global = 0` (variable global → compartida, porque hay un único espacio de
    direcciones para todo userland).
-2. Crea `2 × TOTAL_PAIR_PROCESSES = 4` procesos `my_process_inc`:
-   - 2 con `inc = -1` (decrementan)
-   - 2 con `inc = +1` (incrementan)
-   Cada uno ejecuta `n` veces la operación.
-3. Cada worker, en su bucle, hace `slowInc(&global, inc)`, que es un incremento **no atómico
+4. Crea `2 × pares` procesos `my_process_inc`, uno decrementador (`inc = -1`) y uno incrementador
+   (`inc = +1`) por par. Cada worker recibe `(iteraciones, inc, use_sem)` y ejecuta `iteraciones`
+   veces la operación. Si algún `create` falla, mata los procesos ya creados, cierra el semáforo,
+   libera el arreglo de PIDs y aborta.
+5. Cada worker, en su bucle, hace `slowInc(&global, inc)`, que es un incremento **no atómico
    a propósito**: lee `global` en una variable local, con 30 % de probabilidad cede la CPU
    (`my_yield`) **en medio** de la operación, luego escribe de vuelta. Ese `yield` intercalado
-   maximiza la chance de que dos procesos lean el mismo valor viejo y se pisen.
-4. Si `use_sem = 1`, cada worker abre el semáforo nombrado `"sem"` (valor inicial `1`) y
-   envuelve `slowInc` entre `my_sem_wait` / `my_sem_post`, serializando los accesos.
-5. El proceso principal hace `my_wait` de los 4 hijos e imprime `Valor final: <global>`.
+   maximiza la chance de que dos procesos lean el mismo valor viejo y se pisen. Si `use_sem = 1`,
+   cada worker abre el mismo semáforo `"sem"` y envuelve `slowInc` entre `my_sem_wait` /
+   `my_sem_post`, serializando los accesos.
+6. El proceso principal hace `my_wait` de los `2 × pares` hijos, imprime `Valor final: <global>`,
+   cierra el semáforo y libera el arreglo de PIDs.
 
 ### Resultado esperado
-- `test_sync <n> 1` → **`Valor final: 0`** siempre (2 incrementos y 2 decrementos de `n` pasos
-  cada uno se cancelan; el semáforo garantiza atomicidad).
-- `test_sync <n> 0` → **valor distinto de 0** (con `n` grande, p. ej. `1000`), evidenciando la
-  condición de carrera. El valor exacto varía, pero rara vez es `0`.
+- `test_sync <pares> <iteraciones> 1` → **`Valor final: 0`** siempre (igual cantidad de
+  incrementos y decrementos se cancelan; el semáforo garantiza atomicidad).
+- `test_sync <pares> <iteraciones> 0` → **valor distinto de 0** (con `iteraciones` grande, p. ej.
+  `1000`), evidenciando la condición de carrera. El valor exacto varía, pero rara vez es `0`.
 
 ---
 
@@ -205,8 +212,8 @@ kill <pid>
 test_proc 10 &
 
 # Sincronización (terminan solos)
-test_sync 1000 1     # → Valor final: 0
-test_sync 1000 0     # → Valor final: != 0 (race condition)
+test_sync 2 1000 1     # → Valor final: 0
+test_sync 2 1000 0     # → Valor final: != 0 (race condition)
 
 # Prioridades (termina solo)
 test_prio 1000000
