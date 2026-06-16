@@ -16,6 +16,8 @@
 *.pdf
 pdf/
 .obsidian/
+TP 2.txt
+estado_entrega.md
 
 .gemini/
 gha-creds-*.json
