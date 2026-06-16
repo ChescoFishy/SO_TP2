@@ -9,6 +9,7 @@ typedef struct {
     char     buffer[PIPE_BUF_SIZE];
     int      head;       /* posicion de lectura */
     int      tail;       /* posicion de escritura */
+    int      count;      /* bytes actualmente almacenados */
     int      readers;    /* cantidad de extremos de lectura abiertos */
     int      writers;    /* cantidad de extremos de escritura abiertos */
     char     data_sem[16];   /* cuenta bytes disponibles */
@@ -63,6 +64,7 @@ void pipe_init(void) {
         pipes[i].in_use  = 0;
         pipes[i].head    = 0;
         pipes[i].tail    = 0;
+        pipes[i].count   = 0;
         pipes[i].readers = 0;
         pipes[i].writers = 0;
         pipes[i].name[0] = '\0';
@@ -98,6 +100,7 @@ int pipe_create(int fds[2]) {
     p->in_use  = 1;
     p->head    = 0;
     p->tail    = 0;
+    p->count   = 0;
     p->readers = 1;
     p->writers = 1;
     p->name[0] = '\0';
@@ -147,6 +150,7 @@ int pipe_open(const char *name, int fds[2]) {
     p->in_use  = 1;
     p->head    = 0;
     p->tail    = 0;
+    p->count   = 0;
     p->readers = 1;
     p->writers = 1;
     str_copy_n(p->name, name, PIPE_NAME_LEN);
@@ -214,28 +218,30 @@ int64_t pipe_read(int fd, char *buf, uint64_t n) {
 
     uint64_t read = 0;
     while (read < n) {
-        /* Si no hay datos y no hay writers, EOF */
-        if (p->head == p->tail && p->writers == 0) {
+        /* Si no hay datos y no hay writers, EOF. No usar head==tail: tambien
+        ** ocurre cuando el buffer circular esta lleno. */
+        if (p->count == 0 && p->writers == 0) {
             return (int64_t)read;
         }
 
         sem_wait(p->data_sem);
 
         /* tras el wait, si seguimos sin datos y no hay writers → EOF */
-        if (p->head == p->tail && p->writers == 0) {
+        if (p->count == 0 && p->writers == 0) {
             return (int64_t)read;
         }
 
         sem_wait(p->mutex_sem);
         buf[read++] = p->buffer[p->head];
         p->head = (p->head + 1) % PIPE_BUF_SIZE;
+        p->count--;
         sem_post(p->mutex_sem);
 
         sem_post(p->space_sem);
 
         /* leemos byte a byte hasta n, pero si el buffer queda vacío
            devolvemos lo leído sin bloquear (semántica POSIX). */
-        if (p->head == p->tail) return (int64_t)read;
+        if (p->count == 0) return (int64_t)read;
     }
     return (int64_t)read;
 }
@@ -260,6 +266,7 @@ int64_t pipe_write(int fd, const char *buf, uint64_t n) {
         sem_wait(p->mutex_sem);
         p->buffer[p->tail] = buf[written++];
         p->tail = (p->tail + 1) % PIPE_BUF_SIZE;
+        p->count++;
         sem_post(p->mutex_sem);
 
         sem_post(p->data_sem);

@@ -10,7 +10,7 @@
 #define MIN_ORDER 4     /* 2^4 = 16 bytes (8B header + 8B payload minimo) */ 
 #define MAX_ORDER 23    /* 2^23 = 8 MB */ 
 
-/* Numero total de bloques distintos diponibles para Buddy. */
+/* Numero total de bloques distintos disponibles para Buddy. */
 #define ORDERS (MAX_ORDER - MIN_ORDER + 1)  
 
 /* 
@@ -70,7 +70,7 @@ static FreeNode *get_buddy(FreeNode *block, int order){
     return (FreeNode *)((uintptr_t)heap_base + buddy_off);
 }
 
-/* ELimina un nodo especifico de la lista. Usado durante la coalescencia. */
+/* Elimina un nodo especifico de la lista. Usado durante la coalescencia. */
 static void list_remove(int order, FreeNode *target){
     FreeNode **cur = &free_lists[order_idx(order)];
 
@@ -203,7 +203,7 @@ void mm_free(void *ptr){
         block->hdr.order = (uint8_t)order;
     }
  
-    /* Vuelvee🐐 a ingresar el bloque liberado a la lista de memorias libres */
+    /* Vuelve a ingresar el bloque liberado a la lista de memorias libres. */
     block->next = free_lists[order_idx(order)];
     free_lists[order_idx(order)] = block;
 }

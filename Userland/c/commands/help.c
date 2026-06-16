@@ -7,17 +7,33 @@
 // La tabla commands[] vive en shell/parser.c; la exponemos via find/iteracion.
 extern Command commands[];
 
+static int is_test_command(const char *name) {
+    return strcmp(name, "test_mm") == 0 ||
+           strcmp(name, "test_proc") == 0 ||
+           strcmp(name, "test_prio") == 0 ||
+           strcmp(name, "test_sync") == 0;
+}
+
+static void print_command(Command *cmd) {
+    shellPrintString("  ");
+    shellPrintString(cmd->name);
+    int pad = 14 - (int)strlen(cmd->name);
+    for(int j = 0; j < pad; j++) shellPrintString(" ");
+    shellPrintString(cmd->description ? (char *)cmd->description : "");
+    shellPrintString("\n");
+}
+
 // Lista de comandos disponibles, generada desde la tabla commands[].
 void help(){
     shellPrintString("Comandos disponibles:\n");
     for(int i = 0; commands[i].name != 0; i++){
-        shellPrintString("  ");
-        shellPrintString(commands[i].name);
-        /* padding hasta columna 12 */
-        int pad = 12 - (int)strlen(commands[i].name);
-        for(int j = 0; j < pad; j++) shellPrintString(" ");
-        shellPrintString(commands[i].description ? (char *)commands[i].description : "");
-        shellPrintString("\n");
+        if(!is_test_command(commands[i].name))
+            print_command(&commands[i]);
+    }
+    shellPrintString("Tests de catedra:\n");
+    for(int i = 0; commands[i].name != 0; i++){
+        if(is_test_command(commands[i].name))
+            print_command(&commands[i]);
     }
     shellPrintString("Operadores:\n");
     shellPrintString("  cmd &        ejecuta en background\n");

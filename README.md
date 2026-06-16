@@ -124,7 +124,7 @@ los de foreground antes de mostrar de nuevo el prompt.
 | `test_mm` | `<max_memoria>` | Test del memory manager (ver abajo). |
 | `test_proc` | `<max_procesos>` | Stress de creación/kill/block/unblock de procesos. |
 | `test_prio` | `<valor_objetivo>` | Muestra diferencias de ejecución según prioridad. |
-| `test_sync` | `<n> <use_sem>` | Lectores/escritores sobre una variable compartida. |
+| `test_sync` | `<pares> <iteraciones> <use_sem>` | Pares de procesos incrementan/decrementan una variable compartida. |
 
 ### Ejemplos
 
@@ -141,8 +141,8 @@ los de foreground antes de mostrar de nuevo el prompt.
 > mvar 2 2                  # 2 escritores y 2 lectores sobre la MVar
 > test_mm 1000000           # test de memoria en foreground
 > test_mm 1000000 &         # ídem en background
-> test_sync 100 1           # con semáforos: el valor final siempre es 0
-> test_sync 100 0           # sin semáforos: el valor final varía
+> test_sync 2 100 1         # con semáforos: el valor final siempre es 0
+> test_sync 2 100 0         # sin semáforos: el valor final varía
 > test_prio 1000000         # se ve que las prioridades altas terminan antes
 > test_proc 5               # stress de procesos (Ctrl+C para cortar)
 ```

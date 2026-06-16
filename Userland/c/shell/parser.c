@@ -26,7 +26,7 @@ Command commands[] = {
     // {"playBeep",  playBeep,             0,             "reproduce una secuencia de beeps"},
     // {"bmFPS",     bmFPS,                0,             "benchmark de FPS"},
     // {"bmCPU",     bmCPU,                0,             "benchmark de CPU"},
-    // {"bmMEM",     bmMEM,                0,             "bengchmark de memoria"},
+    // {"bmMEM",     bmMEM,                0,             "benchmark de memoria"},
     // {"bmKEY",     bmKEY,                0,             "mide latencia de tecla"},
 /*  ===================================================================================*/
 
@@ -39,7 +39,7 @@ Command commands[] = {
     {"test_mm",   0,        test_mm_main,    "<max>     test del memory manager"},
     {"test_proc", 0,        test_proc_main,  "<max>     test de procesos"},
     {"test_prio", 0,        test_prio_main,  "<target>  test de prioridades"},
-    {"test_sync", 0,        test_sync_main,  "<n> <s>   test de sincronizacion"},
+    {"test_sync", 0,        test_sync_main,  "<p> <n> <s> test de sincronizacion"},
     {"test_pipe", 0,        test_pipe_main,  "[bytes]   test de pipes (prod/cons)"},
     {"cat",       0,        cat_main,        "imprime stdin tal como lo recibe"},
     {"echo",      0,        echo_main,       "imprime sus argumentos"},
