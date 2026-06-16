@@ -39,7 +39,7 @@ void help(){
     shellPrintString("  Ctrl+D       envia EOF al stdin\n");
     shellPrintString("Tests de la catedra:\n");
     for(int i = 0; commands[i].name != 0; i++){
-        if(!es_test_catedra(commands[i].name)) continue;
+        if(!is_test_catedra(commands[i].name)) continue;
         print_command(&commands[i]);
     }
 }
