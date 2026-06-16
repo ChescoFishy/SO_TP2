@@ -49,6 +49,15 @@ MM=BUDDY ./compile.sh vbox
 
 La selección es **exclusiva en compilación**: una imagen usa un único MM. Para comparar ambos hay que compilar y correr por separado.
 
+### Reglas `make` (dentro del contenedor)
+
+`./compile.sh` y `MM=BUDDY ./compile.sh` son wrappers que ejecutan `make` dentro del contenedor `TP_SO_2`. Si ya estás dentro del contenedor, las reglas equivalentes son:
+
+| Regla | Memory Manager |
+|-------|---------------|
+| `make` / `make all` | First-Fit (default) |
+| `make buddy` | Buddy System (equivale a `make MM=BUDDY all`) |
+
 ---
 
 ## Ejecutar
@@ -193,6 +202,9 @@ MM=BUDDY ./compile.sh && ./run.sh   # → dentro del OS: test_mm 1000000
 - Solo se registra **un** proceso esperando teclado a la vez (en la práctica
   solo el foreground lee de stdin).
 - Sin paginación: todos los procesos comparten el mismo espacio de direcciones.
+- El árbol conserva **comandos heredados de x64BareBones** (arquitectura, benchmarks
+  `bm*`, manejo de excepciones) que **no forman parte de la entrega de TP2**: no están
+  registrados en la tabla `commands[]` de la shell y se mantienen solo como referencia.
 
 ---
 

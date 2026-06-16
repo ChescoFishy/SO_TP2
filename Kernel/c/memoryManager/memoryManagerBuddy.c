@@ -43,7 +43,7 @@ static int order_idx(int order){
     return order - MIN_ORDER;
 }
 
-/* Requested allocation size to smalles Buddy System order. */
+/* Redondea el tamaño pedido al menor orden del Buddy System que lo contenga. */
 static int size_to_order(uint64_t size){
     int order = MIN_ORDER;
 
@@ -70,7 +70,7 @@ static FreeNode *get_buddy(FreeNode *block, int order){
     return (FreeNode *)((uintptr_t)heap_base + buddy_off);
 }
 
-/* Elimina un nodo especifico de la lista. Usado durante la coalescencia. */
+/* Elimina un nodo específico de la lista. Usado durante la coalescencia. */
 static void list_remove(int order, FreeNode *target){
     FreeNode **cur = &free_lists[order_idx(order)];
 
@@ -203,7 +203,7 @@ void mm_free(void *ptr){
         block->hdr.order = (uint8_t)order;
     }
  
-    /* Vuelve a ingresar el bloque liberado a la lista de memorias libres. */
+    /* Reinserta el bloque liberado en la lista de bloques libres. */
     block->next = free_lists[order_idx(order)];
     free_lists[order_idx(order)] = block;
 }

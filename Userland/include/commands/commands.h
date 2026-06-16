@@ -16,6 +16,11 @@ void red_main(int argc, char **argv);
 void loop_main(int argc, char **argv);
 void mvar_main(int argc, char **argv);
 
+// ─── Builtins de la shell ─────────────────────────────────────────────────────
+void help(void);
+void clear(void);
+void ps(void);
+
 // ─── Builtins de administracion de procesos/memoria ───────────────────────────
 void mem_cmd(void);
 void kill_cmd(void);

@@ -1,21 +1,40 @@
 # Bootloader Module
 
 ## Overview (¿Qué es?)
-El módulo [[bootloader.md|Bootloader]] es el componente responsable de cargar el sistema operativo en la memoria RAM cuando se enciende o reinicia la computadora. En este proyecto (x64BareBones), se encarga de realizar la transición desde el entorno inicial de BIOS (16-bit) hasta el modo protegido y, finalmente, al modo largo (64-bit) necesario para ejecutar el [[kernel_kernel.md|Kernel]].
+El módulo [[bootloader.md|Bootloader]] es el componente encargado de iniciar y preparar el sistema desde el encendido del hardware hasta transferir el control al [[kernel_kernel.md|Kernel]]. Transiciona el procesador desde el modo real de 16 bits heredado de la BIOS, pasando por el modo protegido de 32 bits, hasta llegar al modo largo (Long Mode) de 64 bits.
 
 ## Functionality (¿Qué hace?)
-- Inicializa el hardware básico.
-- Configura las tablas de descriptores globales (GDT) necesarias para cambiar los modos del procesador.
-- Pasa el procesador a modo protegido (32-bit) y posteriormente a modo largo (64-bit).
-- Carga en memoria la sección del [[kernel_kernel.md|Kernel]] y el entorno de usuario ([[userland_shell.md|Userland]]).
-- Transfiere el flujo de ejecución (salto) al punto de entrada del [[kernel_kernel.md|Kernel]].
+- Realiza la transición de los modos del procesador (16-bit real -> 32-bit protegido -> 64-bit largo).
+- Configura e inicializa las estructuras básicas de segmentación (GDT) y paginación inicial (Identity Mapping).
+- Detecta y mapea la memoria física disponible a través de ACPI y las especificaciones de hardware.
+- Lee y carga del sistema de archivos BMFS (BareMetal File System) los binarios correspondientes al [[kernel_kernel.md|Kernel]] y a [[userland_shell.md|Userland]].
+- Transfiere el control de ejecución saltando a la dirección donde reside la rutina de entrada de C del [[kernel_kernel.md|Kernel]].
 
 ## Internal Mechanics (¿Cómo funciona?)
-1. **Punto de entrada:** La BIOS carga el primer sector (MBR) que contiene el código de inicio (generalmente 16 bits).
-2. **Setup y Modo Protegido:** Se establecen registros de segmento y se activa el bit PE en el registro CR0 para entrar en Modo Protegido, habilitando el uso de 32 bits y memoria por encima de 1MB.
-3. **Paginación y Modo Largo (64-bit):** Se preparan las tablas de paginación (PML4, PDP, PD, PT) de forma identity-mapped y se configura el registro EFER (Extended Feature Enable Register) para habilitar el Modo Largo (Long Mode).
-4. **Carga y Salto al [[kernel_kernel.md|Kernel]]:** Descomprime y sitúa los binarios del [[kernel_kernel.md|Kernel]] y [[userland_shell.md|Userland]] en sus direcciones preestablecidas. Una vez todo listo, se realiza un salto absoluto a la dirección de memoria donde reside el [[kernel_kernel.md|Kernel]].
+1. **Inicio en MBR:** Al encender el equipo, la BIOS carga el sector de arranque de 512 bytes (`bmfs_mbr.sys`/`bmfs_mbr.asm`) en la dirección `0x7C00`. Este código formatea el disco o lee la estructura BMFS para ubicar el cargador secundario (`pure64.sys`).
+2. **Setup y Modo Protegido (32-bit):** En `pure64.asm`, se deshabilitan las interrupciones del procesador (`cli`), se define una GDT temporal y se activa el bit PE (Protection Enable) del registro de control `CR0` para pasar a Modo Protegido de 32 bits.
+3. **Paginación y Modo Largo (64-bit):** Se inicializan las tablas de paginación iniciales de 4 niveles (PML4, PDPT, PD, PT) mapeando la memoria física directamente (identity-mapped) para que las direcciones virtuales coincidan con las físicas. Se activa el bit LME (Long Mode Enable) en el registro EFER (Extended Feature Enable Register) y se habilita la paginación activando el bit PG de `CR0`. Finalmente, se realiza un salto largo (Far Jump) cargando el selector de segmento de código de 64 bits para entrar formalmente en Long Mode.
+4. **Inicialización de SMP y ACPI:** Se detectan cores adicionales (Application Processors) y se analiza el ACPI para mapear el mapa de memoria y la información de la CPU.
+5. **Carga y Salto al Kernel:** Se lee el archivo `kernel.bin` desde el BMFS en disco y se lo copia a la dirección de memoria física preestablecida (`0x100000`). Posteriormente se realiza un salto directo al punto de entrada del [[kernel_kernel.md|Kernel]].
 
-## Comments and Limitations
-- **Limitaciones actuales:** El [[bootloader.md|Bootloader]] es proporcionado por la cátedra (Pure64/BareBones) y no es parte de las implementaciones a modificar, lo que significa que su configuración de memoria y paginación inicial es rígida.
-- **Comentarios:** No es necesario modificar este módulo durante el desarrollo habitual del trabajo práctico, pero comprender cómo deja la memoria mapeada es vital para la implementación del [[kernel_memory_manager.md|Memory Manager]] y el [[kernel_kernel.md|Kernel]].
+## Key Files & Structs (Archivos y Estructuras Clave)
+* **Archivos principales:**
+  - `Bootloader/Pure64/src/bootsectors/bmfs_mbr.asm`: Código del primer sector (MBR) que interactúa con la BIOS y localiza a `pure64.sys`.
+  - `Bootloader/Pure64/src/pure64.asm`: Archivo ensamblador principal de Pure64 que implementa la transición a 64 bits y el salto al Kernel.
+  - `Bootloader/BMFS/bmfs.c`: Herramienta en C para formatear e interactuar con imágenes de disco bajo el BareMetal File System.
+  - `Bootloader/Pure64/src/init/acpi.asm`: Mapeo y detección de tablas ACPI para conocer la topología de hardware.
+  - `Bootloader/Pure64/src/init/cpu.asm`: Verificación y habilitación del soporte para modo largo y características de la CPU.
+
+* **Estructuras de datos:**
+  - No aplica a nivel de código de C en el Kernel, pero conceptualmente existe la tabla del directorio de archivos BMFS en el primer sector.
+  
+* **Funciones fundamentales:**
+  - `pure64.asm (código ASM)`: Punto de inicio del cargador secundario. Configura GDT, activa paginación y carga el kernel.
+
+## System Calls Relacionadas
+No aplica. El módulo [[bootloader.md|Bootloader]] corre exclusivamente antes de la existencia de procesos de usuario o del dispatcher de interrupciones, por lo que no expone ninguna llamada al sistema directa para Userland.
+
+## Comments and Limitations (Comentarios y Limitaciones)
+- **Rigidez del Mapeo:** La configuración de paginación inicial provista por Pure64 es de tipo identidad y estática. El [[kernel_kernel.md|Kernel]] hereda este esquema.
+- **Dependencia de BIOS:** Depende de llamadas de interrupción de la BIOS heredada (Legacy BIOS), lo que limita su portabilidad en plataformas modernas basadas únicamente en UEFI.
+- **Ausencia de Modificación Directa:** Al ser código base provisto por la cátedra, no se modifica durante el desarrollo de los laboratorios del TP2, pero su entendimiento es crucial ya que determina la dirección inicial del [[kernel_kernel.md|Kernel]] (`0x100000`) y de [[userland_shell.md|Userland]] (`0x400000`).
