@@ -15,5 +15,6 @@ void red_main(int argc, char **argv){
     while((n = read_full(buf, sizeof(buf))) > 0){
         sys_write_color(STDOUT, buf, n, RED);
     }
+    putchar('\n');
     sys_exit(0);
 }
