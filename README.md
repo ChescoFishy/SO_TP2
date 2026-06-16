@@ -121,6 +121,13 @@ los de foreground antes de mostrar de nuevo el prompt.
 | `wc` | — | Cuenta las líneas recibidas por stdin. |
 | `filter` | — | Reimprime stdin filtrando las vocales. |
 | `mvar` | `<escritores> <lectores>` | Demo lectores/escritores con una MVar sincronizada por dos semáforos nombrados. Crea los hijos y termina de inmediato. |
+
+### Tests de cátedra
+
+Estos tests también son comandos de tipo *proceso*, por lo que admiten `&` y pueden ejecutarse en foreground o background.
+
+| Test | Parámetros | Descripción |
+|------|-----------|-------------|
 | `test_mm` | `<max_memoria>` | Test del memory manager (ver abajo). |
 | `test_proc` | `<max_procesos>` | Stress de creación/kill/block/unblock de procesos. |
 | `test_prio` | `<valor_objetivo>` | Muestra diferencias de ejecución según prioridad. |
