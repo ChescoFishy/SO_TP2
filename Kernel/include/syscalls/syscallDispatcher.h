@@ -62,4 +62,8 @@ uint64_t sys_write_color(uint64_t fd, const char * buff, uint64_t count, uint32_
 // Syscall 38 (cursor de consola)
 void sys_set_cursor(uint64_t on);
 
+// Syscalls 39-40 (filas/columnas de texto disponibles, para paginar)
+uint64_t sys_console_rows(void);
+uint64_t sys_console_cols(void);
+
 #endif

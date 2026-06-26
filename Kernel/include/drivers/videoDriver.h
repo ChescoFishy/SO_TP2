@@ -8,6 +8,8 @@ uint16_t getScreenHeight(void);
 int validPosition(uint64_t x, uint64_t y);
 void setDefaultTextSize(uint64_t size);
 uint64_t getDefaultTextSize(void);
+uint64_t getConsoleRows(void);
+uint64_t getConsoleCols(void);
 void setTextSize(uint8_t size);
 void increaseFontSize(void);
 void decreaseFontSize(void);

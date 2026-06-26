@@ -79,6 +79,11 @@ void sys_speaker_start(uint32_t freq);
 void sys_speaker_off(void);
 uint64_t sys_screen_width(void);
 uint64_t sys_screen_height(void);
+/* Filas/columnas de texto que caben en pantalla con el tamaño de fuente actual.
+** La shell las usa para paginar contando filas fisicas (las lineas largas que no
+** entran en el ancho hacen wrap y ocupan mas de una fila). */
+uint64_t sys_console_rows(void);
+uint64_t sys_console_cols(void);
 void sys_putpixel(uint32_t color, uint64_t x, uint64_t y);
 void sys_fill_rect(uint64_t x, uint64_t y, uint64_t w, uint64_t h, uint32_t color);
 /* Muestra (1) u oculta (0) el cursor parpadeante de la consola; lo dibuja y

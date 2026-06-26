@@ -159,6 +159,20 @@ uint64_t sys_screen_height(void){
     return (uint64_t)getScreenHeight();
 }
 
+/* sys_console_rows: filas de texto que caben en pantalla con el tamaño de fuente
+** actual. La shell la usa para paginar salidas largas (ej. help) sin perder
+** lineas por el scroll automatico. */
+uint64_t sys_console_rows(void){
+    return getConsoleRows();
+}
+
+/* sys_console_cols: columnas de texto que caben en pantalla con el tamaño de
+** fuente actual. Junto a sys_console_rows permite a la shell paginar contando
+** filas fisicas (una linea larga ocupa mas de una fila si hace wrap). */
+uint64_t sys_console_cols(void){
+    return getConsoleCols();
+}
+
 void sys_putpixel(uint32_t color, uint64_t x, uint64_t y){
     putPixel(color, x, y);
 }
@@ -309,4 +323,6 @@ void * syscalls[CANT_SYS] = {
     &sys_pipe_open,         // 36
     &sys_write_color,       // 37
     &sys_set_cursor,        // 38
+    &sys_console_rows,      // 39
+    &sys_console_cols,      // 40
 };

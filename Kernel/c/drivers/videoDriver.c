@@ -81,6 +81,26 @@ void setDefaultTextSize(uint64_t size) {
 
 uint64_t getDefaultTextSize(void) { return defaultTextSize; }
 
+// Filas de texto que caben en pantalla con el tamaño de fuente actual. Usa la
+// misma altura de fila que scroll()/newLineRaw(): (defaultTextSize*FONT_HEIGHT)/4.
+uint64_t getConsoleRows(void) {
+  uint64_t lineHeight = (defaultTextSize * FONT_HEIGHT) / 4;
+  if (lineHeight == 0)
+    lineHeight = 1;
+  uint64_t rows = vbe_mode_info->height / lineHeight;
+  return (rows == 0) ? 1 : rows;
+}
+
+// Columnas de texto que caben en pantalla con el tamaño de fuente actual. Usa el
+// mismo avance horizontal que moveRight(): (FONT_WIDTH*defaultTextSize)/4.
+uint64_t getConsoleCols(void) {
+  uint64_t stepX = (FONT_WIDTH * defaultTextSize) / 4;
+  if (stepX == 0)
+    stepX = 1;
+  uint64_t cols = vbe_mode_info->width / stepX;
+  return (cols == 0) ? 1 : cols;
+}
+
 int validPosition(uint64_t x, uint64_t y) {
   return x < vbe_mode_info->width && y < vbe_mode_info->height;
 }

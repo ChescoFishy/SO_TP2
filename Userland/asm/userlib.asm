@@ -13,6 +13,8 @@ GLOBAL sys_speaker_start
 GLOBAL sys_speaker_off
 GLOBAL sys_screen_width
 GLOBAL sys_screen_height
+GLOBAL sys_console_rows
+GLOBAL sys_console_cols
 GLOBAL sys_putpixel
 GLOBAL sys_fill_rect
 GLOBAL gen_invalid_opcode
@@ -223,6 +225,16 @@ sys_screen_width:
 
 sys_screen_height:
 	mov rax, 13
+	int 0x80
+	ret
+
+sys_console_rows:
+	mov rax, 39
+	int 0x80
+	ret
+
+sys_console_cols:
+	mov rax, 40
 	int 0x80
 	ret
 

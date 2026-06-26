@@ -17,7 +17,7 @@
 
 #define MIN_CHAR 0
 #define MAX_CHAR 256
-#define CANT_SYS 39
+#define CANT_SYS 41
 #define STDOUT 1
 #define STDERR 2
 #define TEXT_SIZE 4
