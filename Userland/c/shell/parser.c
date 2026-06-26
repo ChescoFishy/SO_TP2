@@ -30,7 +30,6 @@ Command commands[] = {
     // {"bmKEY",     bmKEY,                0,             "mide latencia de tecla"},
 /*  ===================================================================================*/
 
-    {"ps",        ps,                   0,             "lista los procesos activos"},
     {"mem",       mem_cmd,              0,             "estado de la memoria"},
     {"kill",      kill_cmd,             0,             "<pid>      mata un proceso"},
     {"nice",      nice_cmd,             0,             "<pid> <p>  cambia prioridad (1-5)"},
@@ -49,6 +48,7 @@ Command commands[] = {
     {"red",       0,        red_main,        "imprime stdin en rojo"},
     {"loop",      0,        loop_main,       "[ticks]   imprime su PID periodicamente"},
     {"mvar",      0,        mvar_main,       "<w> <r>   demo MVar lectores/escritores"},
+    {"ps",        0,        ps_main,         "lista los procesos activos"},
     {0, 0, 0, 0},
 };
 

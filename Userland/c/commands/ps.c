@@ -1,8 +1,11 @@
-// Builtin ps: lista los procesos activos con PID, prioridad, fg, estado, SP, BP y nombre.
+// Proceso ps: lista los procesos activos con PID, prioridad, fg, estado, SP, BP y nombre.
+// Escribe a STDOUT (sys_write via print/putchar), por lo que admite & y |.
 #include <stdint.h>
 #include "lib/userlib.h"
 #include "lib/strings.h"
-#include "shell/shell.h"
+#include "lib/format.h"
+#include "lib/io.h"
+#include "commands/commands.h"
 
 static const char *state_names[] = {"FREE", "READY", "RUNNING", "BLOCKED", "ZOMBIE"};
 
@@ -18,20 +21,20 @@ static const char *state_names[] = {"FREE", "READY", "RUNNING", "BLOCKED", "ZOMB
 // Imprime n espacios.
 static void print_spaces(int n) {
     while (n-- > 0)
-        shellPrintString(" ");
+        putchar(' ');
 }
 
 // Imprime s centrado dentro de un campo de ancho width.
 static void print_centered(const char *s, int width) {
     int len = (int)strlen(s);
     if (len >= width) {
-        shellPrintString((char *)s);
+        print("%s", s);
         return;
     }
     int pad = width - len;
     int left = pad / 2;
     print_spaces(left);
-    shellPrintString((char *)s);
+    print("%s", s);
     print_spaces(pad - left);
 }
 
@@ -43,7 +46,8 @@ static void hex_field(uint64_t value, char *dest) {
 }
 
 // Muestra la lista de procesos activos con PID, nombre, prioridad, estado, SP y BP.
-void ps(void) {
+void ps_main(int argc, char **argv) {
+    (void)argc; (void)argv;
     static ProcessInfo buf[MAX_PROCESSES];
     uint64_t count = sys_ps(buf, MAX_PROCESSES);
     char tmp[24];
@@ -55,7 +59,7 @@ void ps(void) {
     print_centered("SP", W_SP);
     print_centered("BP", W_BP);
     print_centered("NAME", W_NAME);
-    shellPrintString("\n");
+    putchar('\n');
 
     print_centered("---", W_PID);
     print_centered("---", W_PRI);
@@ -64,7 +68,7 @@ void ps(void) {
     print_centered("------------", W_SP);
     print_centered("------------", W_BP);
     print_centered("--------", W_NAME);
-    shellPrintString("\n");
+    putchar('\n');
 
     for (uint64_t i = 0; i < count; i++) {
         // PID
@@ -92,6 +96,8 @@ void ps(void) {
 
         // Nombre
         print_centered(buf[i].name, W_NAME);
-        shellPrintString("\n");
+        putchar('\n');
     }
+
+    sys_exit(0);
 }
